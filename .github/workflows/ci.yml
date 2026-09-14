@@ -1,0 +1,23 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    container: oven/bun:1.4.2
+    steps:
+      - uses: actions/checkout@v4
+      - name: install
+        run: bun install
+      - name: test
+        run: bun test
+      - name: typecheck
+        run: bunx tsc --noEmit
+      - name: lint
+        run: bunx biome check .
+      - name: build
+        run: bun run scripts/build.ts

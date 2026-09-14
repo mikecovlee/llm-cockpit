@@ -6,7 +6,7 @@ VOLUME ?= cockpit_mod
 ROOT   := $(abspath .)
 RUN    := docker run --rm -v $(ROOT):/work -v $(VOLUME):/work/node_modules -w /work $(IMG)
 
-.PHONY: shell install test typecheck lint run image
+.PHONY: shell install test typecheck lint run image binary
 
 shell:
 	$(RUN) -it --network host bash
@@ -28,3 +28,6 @@ run:
 
 image:
 	docker build -t llm-cockpit:dev .
+
+binary:
+	$(RUN) bun build --compile src/server.ts --outfile dist/cockpit
