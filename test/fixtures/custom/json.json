@@ -1,0 +1,6 @@
+{
+  "queue": { "depth": 3 },
+  "gpu": [{ "util": 0.81, "mem": 40 }, { "util": 0.77, "mem": 38 }],
+  "tokens": { "served": 12345 },
+  "meta": { "model": "demo" }
+}

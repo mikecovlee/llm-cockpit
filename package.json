@@ -1,0 +1,22 @@
+{
+  "name": "llm-cockpit",
+  "version": "0.1.0",
+  "description": "Multi-engine inference console: live metrics cockpit + OpenAI-compatible chat. Adapter-driven: SGLang, vLLM, custom engines.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "bun run src/server.ts",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check ."
+  },
+  "dependencies": {
+    "yaml": "^2.4.0"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.0.0",
+    "@types/bun": "^1.1.0",
+    "typescript": "^5.5.0"
+  }
+}

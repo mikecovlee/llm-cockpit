@@ -1,0 +1,46 @@
+# llm-cockpit configuration.
+# Copy to `cockpit.config.yaml` (same directory) or point $COCKPIT_CONFIG at it.
+# The server also runs zero-config: one target at http://127.0.0.1:8080, auto-detected.
+
+# One or more monitored targets. The engine adapter is auto-detected by probing
+# engine fingerprints (SGLang /get_server_info, vLLM /version).
+targets:
+  - id: sglang-local
+    url: http://127.0.0.1:8080
+    # adapter: sglang            # force: sglang | vllm | (omit for auto-detect)
+    # custom: my-engine         # reference a custom adapter from `custom:` below
+
+# Chat connector: any OpenAI-compatible API. Independent of the metrics targets.
+chat:
+  base_url: http://127.0.0.1:8080/v1
+  # api_key: sk-...             # optional; many self-hosted engines need none
+
+# Optional declarative adapters for custom engines (or non-Prometheus JSON APIs).
+# `source: prometheus` — mapping values are metric names from the url's /metrics text.
+# `source: json`       — mapping values are JSON paths (e.g. $.queue.depth, $.gpu[0].util).
+# Mapping fields: requests.{running,queued,swapped,paused}
+#                 throughput.{generationTps,prefillTps,requestsPerSec}
+#                 tokens.{promptTotal,generationTotal,cachedTotal}
+#                 counts.requestsCompletedTotal
+#                 cache.{kvUsagePct,kvUsedTokens,kvTotalTokens,hitRate,prefixHitsTotal,
+#                         prefixQueriesTotal,hostUsedTokens,hostTotalTokens}
+#                 faults.{retractedTotal,preemptedTotal}
+#                 latency.{ttft,tpot,e2e,queueWait}   (histograms auto-detected)
+#                 extras.<name>                       (free-form pass-through)
+custom:
+  # - id: my-engine
+  #   source: prometheus
+  #   url: http://127.0.0.1:8000/metrics
+  #   health: http://127.0.0.1:8000/health
+  #   mapping:
+  #     requests.running: myengine_running_requests
+  #     requests.queued: myengine_waiting_requests
+  #     cache.kvUsagePct: myengine_kv_usage_perc
+  #     latency.ttft: myengine_ttft_seconds
+  #   static:
+  #     engine.model: my-model
+
+server:
+  host: 127.0.0.1        # bind address; use 0.0.0.0 to expose beyond the host
+  port: 7777
+  poll_interval_s: 2

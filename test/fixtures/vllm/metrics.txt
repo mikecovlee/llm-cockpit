@@ -1,0 +1,61 @@
+# HELP vllm:num_requests_running Number of requests currently running.
+# TYPE vllm:num_requests_running gauge
+vllm:num_requests_running 3
+# HELP vllm:num_requests_waiting Number of requests in waiting queue.
+# TYPE vllm:num_requests_waiting gauge
+vllm:num_requests_waiting 1
+# HELP vllm:num_requests_swapped Number of swapped requests.
+# TYPE vllm:num_requests_swapped gauge
+vllm:num_requests_swapped 0
+# HELP vllm:num_preemptions_total Cumulative number of preemptions.
+# TYPE vllm:num_preemptions_total counter
+vllm:num_preemptions_total 2
+# HELP vllm:kv_cache_usage_perc KV cache usage in percentage [0,1].
+# TYPE vllm:kv_cache_usage_perc gauge
+vllm:kv_cache_usage_perc{model_name="test-model"} 0.42
+# HELP vllm:prefix_cache_hits_total Prefix cache hits.
+# TYPE vllm:prefix_cache_hits_total counter
+vllm:prefix_cache_hits_total{model_name="test-model"} 500
+# HELP vllm:prefix_cache_queries_total Prefix cache queries.
+# TYPE vllm:prefix_cache_queries_total counter
+vllm:prefix_cache_queries_total{model_name="test-model"} 1000
+# HELP vllm:prompt_tokens_total Total prompt tokens processed.
+# TYPE vllm:prompt_tokens_total counter
+vllm:prompt_tokens_total{model_name="test-model"} 20000
+# HELP vllm:generation_tokens_total Total generation tokens.
+# TYPE vllm:generation_tokens_total counter
+vllm:generation_tokens_total{model_name="test-model"} 5000
+# HELP vllm:request_success_total Total successful requests.
+# TYPE vllm:request_success_total counter
+vllm:request_success_total{model_name="test-model"} 120
+# HELP vllm:avg_generation_throughput_toks_per_s Average generation throughput (tok/s).
+# TYPE vllm:avg_generation_throughput_toks_per_s gauge
+vllm:avg_generation_throughput_toks_per_s 45.5
+# HELP vllm:avg_prompt_throughput_toks_per_s Average prefill throughput (tok/s).
+# TYPE vllm:avg_prompt_throughput_toks_per_s gauge
+vllm:avg_prompt_throughput_toks_per_s 1200.0
+# HELP vllm:time_to_first_token_seconds Time to first token in seconds.
+# TYPE vllm:time_to_first_token_seconds histogram
+vllm:time_to_first_token_seconds_bucket{model_name="test-model",le="0.1"} 10
+vllm:time_to_first_token_seconds_bucket{model_name="test-model",le="0.5"} 60
+vllm:time_to_first_token_seconds_bucket{model_name="test-model",le="+Inf"} 100
+vllm:time_to_first_token_seconds_sum{model_name="test-model"} 35
+vllm:time_to_first_token_seconds_count{model_name="test-model"} 100
+# HELP vllm:e2e_request_latency_seconds End-to-end request latency in seconds.
+# TYPE vllm:e2e_request_latency_seconds histogram
+vllm:e2e_request_latency_seconds_bucket{model_name="test-model",le="1.0"} 20
+vllm:e2e_request_latency_seconds_bucket{model_name="test-model",le="+Inf"} 100
+vllm:e2e_request_latency_seconds_sum{model_name="test-model"} 180
+vllm:e2e_request_latency_seconds_count{model_name="test-model"} 100
+# HELP vllm:request_time_per_output_token_seconds Time per output token in seconds.
+# TYPE vllm:request_time_per_output_token_seconds histogram
+vllm:request_time_per_output_token_seconds_bucket{model_name="test-model",le="0.05"} 90
+vllm:request_time_per_output_token_seconds_bucket{model_name="test-model",le="+Inf"} 100
+vllm:request_time_per_output_token_seconds_sum{model_name="test-model"} 3.8
+vllm:request_time_per_output_token_seconds_count{model_name="test-model"} 100
+# HELP vllm:request_queue_time_seconds Request queue time in seconds.
+# TYPE vllm:request_queue_time_seconds histogram
+vllm:request_queue_time_seconds_bucket{model_name="test-model",le="0.5"} 95
+vllm:request_queue_time_seconds_bucket{model_name="test-model",le="+Inf"} 100
+vllm:request_queue_time_seconds_sum{model_name="test-model"} 8
+vllm:request_queue_time_seconds_count{model_name="test-model"} 100

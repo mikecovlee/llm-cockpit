@@ -1,0 +1,15 @@
+# TYPE myengine_running gauge
+myengine_running 7
+# TYPE myengine_waiting gauge
+myengine_waiting 2
+# TYPE myengine_kv_usage gauge
+myengine_kv_usage 0.35
+# TYPE myengine_completed counter
+myengine_completed 42
+# TYPE myengine_extra gauge
+myengine_extra 1.5
+# TYPE myengine_ttft histogram
+myengine_ttft_bucket{le="0.2"} 30
+myengine_ttft_bucket{le="+Inf"} 40
+myengine_ttft_sum 6
+myengine_ttft_count 40
