@@ -16,6 +16,7 @@ import {
 import { fetchText } from "./adapters/http.ts";
 import { autoDetect, builtins } from "./adapters/index.ts";
 import type { EngineAdapter } from "./adapters/types.ts";
+import { type ChatConfig, chatStream, listModels } from "./chat/openai.ts";
 import { findHistogram, findSeries, parsePrometheus } from "./core/prom.ts";
 import { Ring, ringCapacity, type Target } from "./core/registry.ts";
 
@@ -55,6 +56,10 @@ function loadConfig(): AppConfig {
 }
 
 const config = loadConfig();
+const chatBase: ChatConfig = {
+  baseUrl: config.chat?.base_url ?? "http://127.0.0.1:8080/v1",
+  apiKey: config.chat?.api_key ?? null,
+};
 const serverCfg = {
   host: config.server?.host ?? "127.0.0.1",
   port: config.server?.port ?? 7777,
@@ -237,7 +242,7 @@ const MIME: Record<string, string> = {
 const server = serve({
   hostname: serverCfg.host,
   port: serverCfg.port,
-  fetch(req: Request) {
+  async fetch(req: Request) {
     const u = new URL(req.url);
 
     if (u.pathname === "/api/health") {
@@ -278,6 +283,61 @@ const server = serve({
         return jsonResponse({ ok: false, errors: ["method not allowed"] }, 405);
       }
       return validateMappingHandler(req);
+    }
+
+    if (u.pathname === "/api/chat/models") {
+      try {
+        const r = await listModels(chatBase);
+        const body = await r.text();
+        if (!r.ok) {
+          return jsonResponse(
+            {
+              ok: false,
+              error: `chat endpoint ${chatBase.baseUrl}: HTTP ${r.status}`,
+            },
+            r.status >= 500 ? 502 : r.status === 404 ? 404 : 502,
+          );
+        }
+        return new Response(body, { headers: { "content-type": "application/json" } });
+      } catch {
+        return jsonResponse(
+          { ok: false, error: `chat endpoint unreachable (${chatBase.baseUrl})` },
+          502,
+        );
+      }
+    }
+
+    if (u.pathname === "/api/chat/stream") {
+      if (req.method !== "POST")
+        return jsonResponse({ ok: false, error: "method not allowed" }, 405);
+      let payload: unknown;
+      try {
+        payload = await req.json();
+      } catch {
+        return jsonResponse({ ok: false, error: "body must be valid JSON" }, 400);
+      }
+      if (!Array.isArray((payload as { messages?: unknown })?.messages)) {
+        return jsonResponse({ ok: false, error: "messages[] is required" }, 400);
+      }
+      try {
+        const r = await chatStream(chatBase, payload as Record<string, unknown>, req.signal);
+        if (!r.ok) {
+          const detail = await r.text();
+          return jsonResponse({ ok: false, status: r.status, error: detail.slice(0, 2000) }, 502);
+        }
+        return new Response(r.body, {
+          headers: {
+            "content-type": "text/event-stream; charset=utf-8",
+            "cache-control": "no-cache",
+            "x-accel-buffering": "no",
+          },
+        });
+      } catch {
+        return jsonResponse(
+          { ok: false, error: `chat endpoint unreachable (${chatBase.baseUrl})` },
+          502,
+        );
+      }
     }
 
     if (u.pathname === "/" || u.pathname === "/index.html") {

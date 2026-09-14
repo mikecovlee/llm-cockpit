@@ -24,7 +24,7 @@ lint:
 	$(RUN) bunx biome check .
 
 run:
-	$(RUN) -it --network host bun run src/server.ts
+	$(RUN) -it --network host sh -c "bun run scripts/build.ts && bun run src/server.ts"
 
 image:
 	docker build -t llm-cockpit:dev .
