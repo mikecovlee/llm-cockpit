@@ -39,22 +39,7 @@ jobs:
       - name: create release + upload assets
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: >
-          bun -e 'const t = process.env.GITHUB_REF_NAME;
-          const body = await Bun.file("release-notes.md").text();
-          const api = `https://api.github.com/repos/${process.env.GITHUB_REPOSITORY}`;
-          const h = { authorization: `Bearer ${process.env.GH_TOKEN}`, "user-agent": "llm-cockpit-ci" };
-          const rel = await fetch(`${api}/releases`, { method: "POST", headers: { ...h, "content-type": "application/json" }, body: JSON.stringify({ tag_name: t, name: t, body, prerelease: false }) });
-          if (!rel.ok && rel.status !== 422) { console.error("release create:", rel.status, await rel.text()); process.exit(1); }
-          const { upload_url: up } = await (await fetch(`${api}/releases/tags/${t}`, { headers: h })).json();
-          const asset = async (file, type) => {
-            const r = await fetch(`${up}?name=${encodeURIComponent(file)}`, { method: "POST", headers: { ...h, "content-type": type }, body: Bun.file(file) });
-            if (!r.ok) { console.error("upload:", file, r.status, await r.text()); process.exit(1); }
-            console.log("asset:", (await r.json()).browser_download_url);
-          };
-          const v = t.replace(/^v/, "");
-          await asset("llm-cockpit-linux-x64.tar.gz", "application/gzip");
-          await asset("llm-cockpit-linux-x64.tar.gz.sha256", "text/plain");'
+        run: bun scripts/release.mjs
 
   image:
     runs-on: ubuntu-latest
