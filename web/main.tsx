@@ -4,6 +4,22 @@ import hljs from "highlight.js";
 import { marked } from "marked";
 import * as React from "react";
 import { createRoot } from "react-dom/client";
+import {
+  buildPayload,
+  type ChatParams,
+  type ChatUsage,
+  copyText,
+  defaultMetrics,
+  defaultParams,
+  formatUsage,
+  loadSession,
+  type MetricToggles,
+  parseUsage,
+  type SessionMsg,
+  safeLocalStorage,
+  saveSession,
+  type WireMessage,
+} from "./chatPayload.ts";
 
 /* ---------- canonical model types (mirror of src/core/model.ts) ---------- */
 
@@ -281,6 +297,7 @@ interface ChatMsg {
   thinking?: string;
   streaming?: boolean;
   images?: { id: string; url: string }[];
+  usage?: ChatUsage;
 }
 
 type ContentPart =
@@ -322,6 +339,7 @@ interface ProviderInfo {
   id: string;
   name: string;
   default: boolean;
+  thinking: { on: Record<string, unknown> | null; off: Record<string, unknown> | null } | null;
 }
 
 interface ProviderGroup {
@@ -337,11 +355,37 @@ const splitSel = (v: string): { pid: string; model: string } | null => {
   return i < 0 ? null : { pid: v.slice(0, i), model: v.slice(i + 2) };
 };
 
+const initialSession = loadSession(safeLocalStorage());
+
+const parseNum = (v: string): number | null => {
+  if (v.trim() === "") return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+};
+
 function Chat() {
-  const [sel, setSel] = React.useState<string>("");
+  const [sel, setSel] = React.useState<string>(initialSession?.sel ?? "");
   const [groups, setGroups] = React.useState<ProviderGroup[]>([]);
   const [chatErr, setChatErr] = React.useState<string | null>(null);
-  const [msgs, setMsgs] = React.useState<ChatMsg[]>([]);
+  const [msgs, setMsgs] = React.useState<ChatMsg[]>(() =>
+    (initialSession?.msgs ?? []).map(
+      (m): ChatMsg => ({
+        id: m.id,
+        role: m.role,
+        content: m.content,
+        thinking: m.thinking,
+        images: m.images?.map((u, i) => ({ id: `${m.id}-im${i}`, url: u })),
+        usage: m.usage,
+      }),
+    ),
+  );
+  const [params, setParams] = React.useState<ChatParams>(initialSession?.params ?? defaultParams());
+  const [metrics, setMetrics] = React.useState<MetricToggles>(
+    initialSession?.metrics ?? defaultMetrics(),
+  );
+  const [showParams, setShowParams] = React.useState(false);
+  const [copiedId, setCopiedId] = React.useState<string | null>(null);
+  const noStreamUsage = React.useRef(new Set<string>());
   const [input, setInput] = React.useState("");
   const [busy, setBusy] = React.useState(false);
   const abortRef = React.useRef<AbortController | null>(null);
@@ -438,7 +482,13 @@ function Chat() {
         setGroups(loaded);
         const def = loaded.find((g) => g.info.id === pj.default) ?? loaded[0];
         const first = def?.models[0];
-        if (def !== undefined && first !== undefined) setSel(`${def.info.id}::${first}`);
+        const wanted = initialSession?.sel ?? "";
+        const wantedValid =
+          wanted !== "" &&
+          loaded.some((g) => g.models.some((mm) => `${g.info.id}::${mm}` === wanted));
+        if (!wantedValid && def !== undefined && first !== undefined) {
+          setSel(`${def.info.id}::${first}`);
+        }
       } catch {
         if (!stop) setChatErr("cannot reach chat API");
       }
@@ -453,41 +503,78 @@ function Chat() {
     if (el !== null && msgs.length > 0) el.scrollTop = el.scrollHeight;
   }, [msgs]);
 
-  const send = async (): Promise<void> => {
-    const text = input.trim();
+  const wireFor = (list: ChatMsg[]): WireMessage[] =>
+    list.map(
+      (m): WireMessage => ({
+        role: m.role,
+        content: toContent(m.content, m.images !== undefined ? m.images : []),
+      }),
+    );
+
+  const runStream = async (hist: ChatMsg[], newUser: ChatMsg | null): Promise<void> => {
     const cur = splitSel(sel);
-    if ((text === "" && pendingImages.length === 0) || busy || cur === null || cur.model === "")
-      return;
-    const history = msgs.map((m): { role: string; content: string | ContentPart[] } => ({
-      role: m.role,
-      content: toContent(m.content, m.images !== undefined ? m.images : []),
-    }));
-    history.push({ role: "user", content: toContent(text, pendingImages) });
-    setMsgs([
-      ...msgs,
-      {
-        id: uid(),
-        role: "user",
-        content: text,
-        images: pendingImages.length > 0 ? [...pendingImages] : undefined,
-      },
-      { id: uid(), role: "assistant", content: "", streaming: true },
-    ]);
+    if (cur === null || cur.model === "") return;
+    const assistantId = uid();
+    const base = newUser !== null ? [...hist, newUser] : hist;
+    setMsgs([...base, { id: assistantId, role: "assistant", content: "", streaming: true }]);
     setInput("");
     setPendingImages([]);
     setAttachError(null);
     setBusy(true);
     const ctl = new AbortController();
     abortRef.current = ctl;
+    const grp = groups.find((g) => g.info.id === cur.pid);
+    const wantUsage = !noStreamUsage.current.has(cur.pid);
+    const payload = buildPayload({
+      model: cur.model,
+      history: wireFor(base),
+      params,
+      thinking: grp?.info.thinking ?? null,
+      includeUsage: wantUsage,
+    });
     let acc = "";
     let think = "";
+    let usage: Omit<ChatUsage, "tps" | "ttftMs"> | null = null;
+    let finalUsage: ChatUsage | undefined;
+    const t0 = Date.now();
+    let firstDeltaAt: number | null = null;
+    const markDelta = (): void => {
+      if (firstDeltaAt === null) firstDeltaAt = Date.now();
+    };
+    const finishUsage = (): void => {
+      if (usage === null) return;
+      const end = Date.now();
+      const tps =
+        usage.completion !== null && firstDeltaAt !== null && end > firstDeltaAt
+          ? usage.completion / ((end - firstDeltaAt) / 1000)
+          : null;
+      finalUsage = {
+        ...usage,
+        tps,
+        ttftMs: firstDeltaAt === null ? null : firstDeltaAt - t0,
+      };
+    };
     try {
-      const r = await fetch(`/api/chat/stream?provider=${encodeURIComponent(cur.pid)}`, {
+      let r = await fetch(`/api/chat/stream?provider=${encodeURIComponent(cur.pid)}`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ model: cur.model, messages: history }),
+        body: JSON.stringify(payload),
         signal: ctl.signal,
       });
+      if (!r.ok && wantUsage) {
+        const probe = await r.text().catch(() => "");
+        if (/stream_options/i.test(probe)) {
+          noStreamUsage.current.add(cur.pid);
+          r = await fetch(`/api/chat/stream?provider=${encodeURIComponent(cur.pid)}`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ ...payload, stream_options: undefined }),
+            signal: ctl.signal,
+          });
+        } else {
+          throw new Error(`HTTP ${r.status}: ${probe.slice(0, 300)}`);
+        }
+      }
       if (!r.ok) {
         const errText = await r.text();
         throw new Error(`HTTP ${r.status}: ${errText.slice(0, 300)}`);
@@ -511,9 +598,17 @@ function Chat() {
             const j = JSON.parse(data) as {
               choices?: { delta?: { content?: string; reasoning_content?: string } }[];
             };
+            const u = parseUsage(j);
+            if (u !== null) usage = u;
             const delta = j.choices?.[0]?.delta;
-            if (typeof delta?.content === "string") acc += delta.content;
-            if (typeof delta?.reasoning_content === "string") think += delta.reasoning_content;
+            if (typeof delta?.content === "string" && delta.content !== "") {
+              acc += delta.content;
+              markDelta();
+            }
+            if (typeof delta?.reasoning_content === "string" && delta.reasoning_content !== "") {
+              think += delta.reasoning_content;
+              markDelta();
+            }
           } catch {
             // skip malformed chunk
           }
@@ -533,7 +628,9 @@ function Chat() {
           return next;
         });
       }
+      finishUsage();
     } catch (e) {
+      finishUsage();
       if ((e as { name?: string })?.name !== "AbortError") {
         acc =
           acc === ""
@@ -551,6 +648,7 @@ function Chat() {
           content: acc === "" ? "*(empty response)*" : acc,
           thinking: think === "" ? undefined : think,
           streaming: false,
+          usage: finalUsage,
         };
       }
       return next;
@@ -558,6 +656,80 @@ function Chat() {
     setBusy(false);
     abortRef.current = null;
   };
+
+  const send = async (): Promise<void> => {
+    const text = input.trim();
+    const cur = splitSel(sel);
+    if ((text === "" && pendingImages.length === 0) || busy || cur === null || cur.model === "")
+      return;
+    const newUser: ChatMsg = {
+      id: uid(),
+      role: "user",
+      content: text,
+      images: pendingImages.length > 0 ? [...pendingImages] : undefined,
+    };
+    await runStream(msgs, newUser);
+  };
+
+  const regenerate = async (): Promise<void> => {
+    if (busy || msgs.length === 0) return;
+    const idx = msgs.map((m) => m.role).lastIndexOf("assistant");
+    if (idx === -1) return;
+    await runStream(msgs.slice(0, idx), null);
+  };
+
+  const copyMsg = async (m: ChatMsg): Promise<void> => {
+    if (await copyText(m.content)) {
+      setCopiedId(m.id);
+      setTimeout(() => setCopiedId(null), 1500);
+    }
+  };
+
+  const newChat = (): void => {
+    if (busy) return;
+    setMsgs([]);
+  };
+
+  const saveNow = (): void => {
+    saveSession(safeLocalStorage(), {
+      v: 1,
+      sel,
+      params,
+      metrics,
+      msgs: msgs
+        .filter((m) => !m.streaming)
+        .map(
+          (m): SessionMsg => ({
+            id: m.id,
+            role: m.role,
+            content: m.content,
+            thinking: m.thinking,
+            images: m.images?.map((im) => im.url),
+            usage: m.usage,
+          }),
+        ),
+    });
+  };
+
+  const saveNowRef = React.useRef(saveNow);
+  saveNowRef.current = saveNow;
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: state deps intentionally re-arm the debounce on every chat/param change
+  React.useEffect(() => {
+    if (busy) return;
+    const t = setTimeout(() => saveNowRef.current(), 400);
+    return () => clearTimeout(t);
+  }, [msgs, sel, params, metrics, busy]);
+
+  React.useEffect(() => {
+    const h = (): void => saveNowRef.current();
+    window.addEventListener("pagehide", h);
+    return () => window.removeEventListener("pagehide", h);
+  }, []);
+
+  const curSel = splitSel(sel);
+  const curThinking =
+    curSel === null ? null : (groups.find((g) => g.info.id === curSel.pid)?.info.thinking ?? null);
 
   return (
     <div className="chat">
@@ -588,6 +760,19 @@ function Chat() {
             </optgroup>
           ))}
         </select>
+        <button
+          type="button"
+          className="mini-btn"
+          title="chat parameters"
+          onClick={() => setShowParams((v) => !v)}
+        >
+          {showParams ? "params ▾" : "params ▸"}
+        </button>
+        {msgs.length > 0 && !busy ? (
+          <button type="button" className="mini-btn" onClick={newChat}>
+            new
+          </button>
+        ) : null}
         <span className="chat-hint" style={{ marginTop: 0 }}>
           {chatErr ??
             (groups.length === 0
@@ -597,13 +782,128 @@ function Chat() {
                 : "OpenAI-compatible · ⏎ send · ⇧⏎ newline")}
         </span>
       </div>
+      {showParams ? (
+        <div className="popover">
+          <div className="prow">
+            <span>temperature</span>
+            <input
+              className="pin"
+              type="number"
+              min="0"
+              max="2"
+              step="0.1"
+              placeholder="default"
+              value={params.temperature ?? ""}
+              onChange={(e) => setParams({ ...params, temperature: parseNum(e.target.value) })}
+            />
+          </div>
+          <div className="prow">
+            <span>top_p</span>
+            <input
+              className="pin"
+              type="number"
+              min="0"
+              max="1"
+              step="0.05"
+              placeholder="default"
+              value={params.topP ?? ""}
+              onChange={(e) => setParams({ ...params, topP: parseNum(e.target.value) })}
+            />
+          </div>
+          <div className="prow">
+            <span>max tokens</span>
+            <input
+              className="pin"
+              type="number"
+              min="1"
+              step="1"
+              placeholder="model default"
+              value={params.maxTokens ?? ""}
+              onChange={(e) => setParams({ ...params, maxTokens: parseNum(e.target.value) })}
+            />
+          </div>
+          <div className="prow col">
+            <span>system prompt</span>
+            <textarea
+              className="psys"
+              rows={2}
+              placeholder="optional"
+              value={params.system}
+              onChange={(e) => setParams({ ...params, system: e.target.value })}
+            />
+          </div>
+          {curThinking !== null ? (
+            <div className="prow">
+              <span>thinking</span>
+              <label className="chk">
+                <input
+                  type="checkbox"
+                  checked={params.thinkingOn}
+                  onChange={(e) => setParams({ ...params, thinkingOn: e.target.checked })}
+                />
+                {params.thinkingOn ? "on" : "off"}
+              </label>
+            </div>
+          ) : null}
+          <div className="prow">
+            <span>footnote</span>
+            <div className="checks">
+              {(
+                [
+                  ["tokens", "tokens"],
+                  ["tps", "tok/s"],
+                  ["ttft", "TTFT"],
+                  ["reasoning", "reasoning"],
+                ] as const
+              ).map(([k, label]) => (
+                <label key={k} className="chk">
+                  <input
+                    type="checkbox"
+                    checked={metrics[k]}
+                    onChange={(e) => setMetrics({ ...metrics, [k]: e.target.checked })}
+                  />
+                  {label}
+                </label>
+              ))}
+            </div>
+          </div>
+          <div className="prow">
+            <button type="button" className="mini-btn" onClick={() => setParams(defaultParams())}>
+              reset params
+            </button>
+          </div>
+        </div>
+      ) : null}
       <div className="chat-msgs" ref={scrollRef}>
         {msgs.length === 0 ? (
           <div className="empty">ask anything — chat is proxied to the selected provider</div>
         ) : null}
-        {msgs.map((m) => (
-          <Bubble key={m.id} msg={m} />
-        ))}
+        {msgs.map((m, i) => {
+          const usageLine = m.usage !== undefined ? formatUsage(m.usage, metrics) : "";
+          const showCopy = m.role === "assistant" && m.content !== "" && m.streaming !== true;
+          const showRegen =
+            m.role === "assistant" && i === msgs.length - 1 && !busy && m.streaming !== true;
+          return (
+            <div className="msg-wrap" key={m.id}>
+              <Bubble msg={m} />
+              {usageLine !== "" || showCopy || showRegen ? (
+                <div className="msg-foot">
+                  {usageLine !== "" ? <span>{usageLine}</span> : null}
+                  {showCopy ? (
+                    <button type="button" className="mini-btn" onClick={() => void copyMsg(m)}>
+                      {copiedId === m.id ? "copied" : "copy"}
+                    </button>
+                  ) : null}
+                  {showRegen ? (
+                    <button type="button" className="mini-btn" onClick={() => void regenerate()}>
+                      regenerate
+                    </button>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+          );
+        })}
       </div>
       <div className="chat-input">
         {pendingImages.length > 0 && (

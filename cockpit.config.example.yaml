@@ -18,6 +18,12 @@ chat:
     - id: local                # first entry is the default (or mark default: true)
       name: Local SGLang
       base_url: http://127.0.0.1:8080/v1
+      # Optional: enables a "thinking" on/off switch in the chat UI. The
+      # fragments are merged into the request when that switch is toggled —
+      # shape is provider-specific. SGLang/Qwen use chat_template_kwargs:
+      thinking_toggle:
+        on: { chat_template_kwargs: { enable_thinking: true } }
+        off: { chat_template_kwargs: { enable_thinking: false } }
     # - id: deepseek
     #   name: DeepSeek
     #   base_url: https://api.deepseek.com/v1

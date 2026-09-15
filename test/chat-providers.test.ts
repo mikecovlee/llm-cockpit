@@ -74,7 +74,7 @@ test("publicProviders exposes no urls or keys", () => {
   expect(JSON.stringify(pub)).not.toContain("sk-leak");
   expect(JSON.stringify(pub)).not.toContain("x/v1");
   expect(pub.default).toBe("s");
-  expect(pub.providers[0]).toEqual({ id: "s", name: "SecretCo", default: true });
+  expect(pub.providers[0]).toEqual({ id: "s", name: "SecretCo", default: true, thinking: null });
 });
 
 test("pickProvider: omitted falls back to default, unknown returns undefined", () => {

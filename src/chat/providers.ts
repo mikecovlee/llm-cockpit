@@ -6,6 +6,13 @@ export interface ChatProviderSpec {
   base_url?: string;
   api_key?: string;
   default?: boolean;
+  /** Optional: enables the UI thinking switch. The fragments are merged into
+   * the request payload for the chosen state (on/off) — the shape is
+   * provider-specific (e.g. SGLang/Qwen use chat_template_kwargs). */
+  thinking_toggle?: {
+    on?: Record<string, unknown>;
+    off?: Record<string, unknown>;
+  };
 }
 
 export interface ChatProvider {
@@ -13,6 +20,10 @@ export interface ChatProvider {
   name: string;
   isDefault: boolean;
   cfg: ChatConfig;
+  thinking: {
+    on: Record<string, unknown> | null;
+    off: Record<string, unknown> | null;
+  } | null;
 }
 
 const ID_RE = /^[A-Za-z0-9_-]+$/;
@@ -35,6 +46,7 @@ export function resolveChatProviders(
           name: "local",
           isDefault: true,
           cfg: { baseUrl: `${firstTargetUrl.replace(/\/+$/, "")}/v1`, apiKey: null },
+          thinking: null,
         },
       ],
       errors,
@@ -65,6 +77,10 @@ export function resolveChatProviders(
       name: nm.trim() !== "" ? nm : id,
       isDefault: spec.default === true,
       cfg: { baseUrl: url, apiKey: spec.api_key ?? null },
+      thinking:
+        spec.thinking_toggle === undefined
+          ? null
+          : { on: spec.thinking_toggle.on ?? null, off: spec.thinking_toggle.off ?? null },
     });
   });
 
@@ -89,6 +105,7 @@ export interface ProviderInfo {
   id: string;
   name: string;
   default: boolean;
+  thinking: ChatProvider["thinking"];
 }
 
 export function publicProviders(list: ChatProvider[]): {
@@ -97,7 +114,12 @@ export function publicProviders(list: ChatProvider[]): {
 } {
   const d = list.find((p) => p.isDefault) ?? list[0];
   return {
-    providers: list.map((p) => ({ id: p.id, name: p.name, default: p.isDefault })),
+    providers: list.map((p) => ({
+      id: p.id,
+      name: p.name,
+      default: p.isDefault,
+      thinking: p.thinking,
+    })),
     default: d?.id ?? "",
   };
 }

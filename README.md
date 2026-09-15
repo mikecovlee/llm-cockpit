@@ -59,7 +59,14 @@ or any gateway); one grouped dropdown picks `provider · model`, and requests
 route to the selected provider. Keys stay server-side (`/api/chat/providers`
 exposes ids and names only). Streaming responses render markdown with syntax
 highlighting; reasoning models get a collapsible "thinking" block. `⏎` sends,
-`⇧⏎` inserts a newline, stop aborts in-flight generation. The proxy injects SSE
+`⇧⏎` inserts a newline, stop aborts in-flight generation. A `params` popover
+sets temperature / top_p / max_tokens / system prompt per session, and providers
+declaring `thinking_toggle` get a thinking on/off switch (SGLang/Qwen:
+`chat_template_kwargs.enable_thinking`). Each answer gets a footnote
+(↑prompt ↓completion · tok/s · TTFT · reasoning — individually toggleable) plus
+copy and regenerate. The whole chat — messages, attachments, provider/model and
+params — persists in browser localStorage and survives reloads; `new` clears
+it. The server stores nothing. The proxy injects SSE
 keepalive comments every 15 s, so queue/prefill stalls of minutes survive any
 socket idle timeout; a 10-minute absolute deadline bounds truly dead upstreams.
 
@@ -185,7 +192,11 @@ llm-cockpit 是一个多引擎推理控制台:一个进程里同时提供**实�
   模型 thinking 折叠、markdown + 代码高亮、随时停止;`+` 按钮可附加图片
   (每条最多 4 张、单张原始文件 ≤8MB,浏览器端自动压到 ≤1280px JPEG 再上传——
   原图直发会膨胀成十几万 token 把引擎卡死;需视觉模型支持)。文字与图片可在
-  同一条消息中共存。
+  同一条消息中共存。`params` 浮层按会话设置 temperature / top_p / max_tokens /
+  system prompt,声明了 `thinking_toggle` 的 provider 带思考开关;每条回复带脚注
+  (↑prompt ↓completion · tok/s · TTFT · reasoning,可勾选)与复制/重新生成。整个
+  对话(消息、附件、provider/模型、参数)经浏览器 localStorage 持久化,刷新不丢,
+  `new` 清空;服务端不落盘任何对话数据。
 - **容器化工具链**:`make run / test / typecheck / lint / image / binary`
   全部在容器内执行,不污染宿主机(依赖在 `cockpit_mod` 卷、构建产物在
   `cockpit_dist` 卷,工作树不被写入;`make binary` 导出到 `../cockpit-dist/`)。
