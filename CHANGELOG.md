@@ -5,16 +5,26 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); thi
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-09-15
+
+First release with downloadable artifacts + container image.
+
+### Fixed
+- release asset upload used the raw `upload_url` (which carries a `{name}`
+  template) and 404'd — v0.1.1 ended up with an asset-less release. The
+  release tool now strips the template and lives in `scripts/release.mjs`,
+  where every API failure is logged explicitly.
+
 ## [0.1.1] - 2026-09-15
 
-The v0.1.0 tag produced no artifacts (two release-pipeline bugs found by the
-pipeline itself); it was rolled into this one.
+Rolled up the aborted v0.1.0 tag (release-notes extraction treated the version
+bracket as a regex class). This tag created the GitHub Release but its asset
+upload failed (fixed in 0.1.2).
 
 ### Fixed
 - Server no longer exits when every configured target is unreachable — the
   cockpit boots with an empty dashboard and the chat keeps working (Docker
   deployments on bridge networks hit this with the zero-config default target)
-- release-notes extraction treated the version bracket as a regex class
 
 ## [0.1.0] - 2026-09-15
 
