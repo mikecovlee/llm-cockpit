@@ -30,4 +30,4 @@ image:
 	docker build -t llm-cockpit:dev .
 
 binary:
-	$(RUN) bun build --compile src/server.ts --outfile dist/cockpit
+	$(RUN) sh -c "bun run scripts/build.ts && bun build --compile src/server.ts --outfile dist/cockpit"

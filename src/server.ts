@@ -4,6 +4,7 @@
  */
 
 import { existsSync, readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { serve } from "bun";
 import { parse as parseYaml } from "yaml";
 import {
@@ -225,9 +226,35 @@ async function validateMappingHandler(req: Request): Promise<Response> {
   }
 }
 
-const indexHtml = existsSync("web/index.html")
-  ? readFileSync("web/index.html", "utf8")
-  : "<h1>llm-cockpit</h1>";
+/**
+ * Resolve the web-assets directory (`dist/web`) regardless of how the server
+ * is launched: `bun run src/server.ts` from the repo root (cwd = root), the
+ * bundled `dist/server.js`, or the compiled single-file binary (cwd may be
+ * anywhere, so anchor on the executable's own location).
+ */
+function webRoot(): string | null {
+  const candidates = ["dist/web"];
+  // process.execPath is the real filesystem path of the executable in the
+  // compiled binary (Bun.main is a virtual /$bunfs path there), so anchor
+  // asset resolution on it; harmless no-op in dev (points at the bun binary).
+  const exec = process.execPath;
+  if (exec !== "") {
+    const mdir = dirname(exec);
+    candidates.push(join(mdir, "web"));
+  }
+  for (const c of candidates) {
+    if (existsSync(join(c, "index.html"))) return c;
+  }
+  return null;
+}
+
+const webRootDir = webRoot();
+const indexHtml =
+  webRootDir !== null
+    ? readFileSync(join(webRootDir, "index.html"), "utf8")
+    : existsSync("web/index.html")
+      ? readFileSync("web/index.html", "utf8")
+      : "<h1>llm-cockpit</h1>";
 
 const MIME: Record<string, string> = {
   js: "text/javascript; charset=utf-8",
@@ -348,7 +375,8 @@ const server = serve({
       const rel = u.pathname.slice("/web/".length);
       if (rel.includes("..") || rel.includes("\0"))
         return new Response("forbidden", { status: 403 });
-      const file = `dist/web/${rel}`;
+      if (webRootDir === null) return new Response("not found", { status: 404 });
+      const file = join(webRootDir, rel);
       if (existsSync(file)) {
         const ext = rel.slice(rel.lastIndexOf(".") + 1);
         return new Response(Bun.file(file), {

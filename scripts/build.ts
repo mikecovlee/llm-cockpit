@@ -1,5 +1,5 @@
 // Bundle the server (target bun, zero runtime deps) and the web app (browser).
-import { existsSync, mkdirSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync } from "node:fs";
 import { build } from "bun";
 
 mkdirSync("dist", { recursive: true });
@@ -22,6 +22,7 @@ if (existsSync("web/main.tsx")) {
     console.error("web build failed");
     process.exit(1);
   }
+  copyFileSync("web/index.html", "dist/web/index.html");
 }
 
 if (!server.success) {

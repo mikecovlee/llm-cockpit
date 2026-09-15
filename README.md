@@ -49,6 +49,11 @@ The chat window talks to any OpenAI-compatible API (default: the same engine at
 models get a collapsible "thinking" block. `⏎` sends, `⇧⏎` inserts a newline,
 stop aborts in-flight generation.
 
+**Vision**: the `+` button attaches up to 4 images (≤ 8MB each) to a message.
+Images are sent as inline base64 `image_url` content parts, so the same endpoint
+serves text and multimodal traffic — the chat model must be vision-capable
+(e.g. a Qwen-VL serving) for image inputs to work.
+
 ## Custom engines (no code)
 
 Declare a mapping in `cockpit.config.yaml`; values are Prometheus metric names
@@ -123,7 +128,8 @@ llm-cockpit 是一个多引擎推理控制台:一个进程里同时提供**实�
   延迟直方图 p50/p90/p99、故障计数、extras),UI 只渲染引擎真实上报的字段
   (能力驱动,缺失即隐藏)。
 - **对话窗口**:代理到任意 OpenAI-compatible API,支持 SSE 流式、reasoning
-  模型 thinking 折叠、markdown + 代码高亮、随时停止。
+  模型 thinking 折叠、markdown + 代码高亮、随时停止;`+` 按钮可附加图片
+  (每条最多 4 张、单张 ≤8MB,以 base64 内联发送,需视觉模型支持)。
 - **容器化工具链**:`make run / test / typecheck / lint / image / binary`
   全部在容器内执行,不污染宿主机。
 

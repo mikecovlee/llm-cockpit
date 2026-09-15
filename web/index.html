@@ -274,6 +274,66 @@
       .chat-input textarea:focus {
         border-color: rgba(56, 189, 248, 0.5);
       }
+      .chat-input .attach-btn {
+        width: 34px;
+        height: 34px;
+        flex: 0 0 auto;
+        background: transparent;
+        border: 1px solid #30363d;
+        border-radius: 10px;
+        color: #8b949e;
+        font-size: 18px;
+        cursor: pointer;
+      }
+      .chat-input .attach-btn:hover {
+        color: #e6edf3;
+        border-color: rgba(56, 189, 248, 0.5);
+      }
+      .chat-input .thumbs,
+      .chat-input .attach-error {
+        flex-basis: 100%;
+        margin-bottom: 2px;
+      }
+      .thumbs {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-bottom: 8px;
+      }
+      .thumb {
+        width: 76px;
+        height: 76px;
+        object-fit: cover;
+        border-radius: 8px;
+        border: 1px solid #30363d;
+      }
+      .thumb-wrap {
+        position: relative;
+        display: inline-block;
+      }
+      .thumb-x {
+        position: absolute;
+        top: -6px;
+        right: -6px;
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        background: #161b22;
+        border: 1px solid #30363d;
+        color: #8b949e;
+        font-size: 12px;
+        line-height: 1;
+        cursor: pointer;
+        padding: 0;
+      }
+      .thumb-x:hover {
+        color: #f87171;
+        border-color: #f87171;
+      }
+      .attach-error {
+        color: #f87171;
+        font-size: 12px;
+      }
       .chat-btn {
         background: #0e7490;
         color: #f0fdff;

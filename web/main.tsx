@@ -227,7 +227,12 @@ interface ChatMsg {
   content: string;
   thinking?: string;
   streaming?: boolean;
+  images?: { id: string; url: string }[];
 }
+
+type ContentPart =
+  | { type: "text"; text: string }
+  | { type: "image_url"; image_url: { url: string } };
 
 function Bubble({ msg }: { msg: ChatMsg }) {
   const ref = React.useRef<HTMLDivElement>(null);
@@ -241,6 +246,13 @@ function Bubble({ msg }: { msg: ChatMsg }) {
   }, [msg.content]);
   return (
     <div className={`bubble ${msg.role}`}>
+      {msg.role === "user" && msg.images !== undefined && msg.images.length > 0 ? (
+        <div className="thumbs">
+          {msg.images.map((img) => (
+            <img key={img.id} src={img.url} alt="attachment" className="thumb" />
+          ))}
+        </div>
+      ) : null}
       {msg.thinking !== undefined && msg.thinking !== "" ? (
         <details className="thinking">
           <summary>thinking</summary>
@@ -262,6 +274,46 @@ function Chat() {
   const [busy, setBusy] = React.useState(false);
   const abortRef = React.useRef<AbortController | null>(null);
   const scrollRef = React.useRef<HTMLDivElement>(null);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const [pendingImages, setPendingImages] = React.useState<{ id: string; url: string }[]>([]);
+  const [attachError, setAttachError] = React.useState<string | null>(null);
+
+  const addFiles = (files: FileList | null): void => {
+    if (files === null || files.length === 0) return;
+    setAttachError(null);
+    for (const file of Array.from(files)) {
+      if (pendingImages.length >= 4) {
+        setAttachError("Up to 4 images per message.");
+        break;
+      }
+      if (file.size > 8 * 1024 * 1024) {
+        setAttachError(`${file.name} exceeds 8MB — skipped.`);
+        continue;
+      }
+      const reader = new FileReader();
+      reader.onload = (): void => {
+        if (typeof reader.result === "string") {
+          setPendingImages((prev) =>
+            [...prev, { id: crypto.randomUUID(), url: reader.result as string }].slice(0, 4),
+          );
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const toContent = (
+    text: string,
+    images: { id: string; url: string }[],
+  ): string | ContentPart[] => {
+    if (images.length === 0) return text;
+    const parts: ContentPart[] = images.map((p) => ({
+      type: "image_url",
+      image_url: { url: p.url },
+    }));
+    if (text !== "") parts.push({ type: "text", text });
+    return parts;
+  };
 
   React.useEffect(() => {
     let stop = false;
@@ -295,15 +347,25 @@ function Chat() {
 
   const send = async (): Promise<void> => {
     const text = input.trim();
-    if (text === "" || busy || model === "") return;
-    const history = msgs.map((m) => ({ role: m.role, content: m.content }));
-    history.push({ role: "user", content: text });
+    if ((text === "" && pendingImages.length === 0) || busy || model === "") return;
+    const history = msgs.map((m): { role: string; content: string | ContentPart[] } => ({
+      role: m.role,
+      content: toContent(m.content, m.images !== undefined ? m.images : []),
+    }));
+    history.push({ role: "user", content: toContent(text, pendingImages) });
     setMsgs([
       ...msgs,
-      { id: crypto.randomUUID(), role: "user", content: text },
+      {
+        id: crypto.randomUUID(),
+        role: "user",
+        content: text,
+        images: pendingImages.length > 0 ? [...pendingImages] : undefined,
+      },
       { id: crypto.randomUUID(), role: "assistant", content: "", streaming: true },
     ]);
     setInput("");
+    setPendingImages([]);
+    setAttachError(null);
     setBusy(true);
     const ctl = new AbortController();
     abortRef.current = ctl;
@@ -418,6 +480,43 @@ function Chat() {
         ))}
       </div>
       <div className="chat-input">
+        {pendingImages.length > 0 && (
+          <div className="thumbs pending">
+            {pendingImages.map((p) => (
+              <span key={p.id} className="thumb-wrap">
+                <img src={p.url} alt="pending attachment" className="thumb" />
+                <button
+                  type="button"
+                  className="thumb-x"
+                  title="remove"
+                  onClick={() => setPendingImages((prev) => prev.filter((q) => q.id !== p.id))}
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+        {attachError !== null && <div className="attach-error">{attachError}</div>}
+        <button
+          type="button"
+          className="attach-btn"
+          title="attach image"
+          onClick={() => fileInputRef.current?.click()}
+        >
+          +
+        </button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          multiple
+          style={{ display: "none" }}
+          onChange={(e) => {
+            addFiles(e.target.files);
+            e.target.value = "";
+          }}
+        />
         <textarea
           value={input}
           placeholder={model === "" ? "waiting for model list…" : `message ${model}…`}
@@ -438,7 +537,7 @@ function Chat() {
           <button
             type="button"
             className="chat-btn"
-            disabled={input.trim() === "" || model === ""}
+            disabled={(input.trim() === "" && pendingImages.length === 0) || model === ""}
             onClick={() => void send()}
           >
             send
