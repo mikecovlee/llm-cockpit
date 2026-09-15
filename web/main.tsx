@@ -696,6 +696,7 @@ function Spark({ a, b }: { a: (number | null)[]; b: (number | null)[] }) {
   if (a.length < 2) return <div className="spark-empty" />;
   return (
     <svg className="spark" viewBox="0 0 100 40" preserveAspectRatio="none">
+      <title>GPU utilization and memory over time</title>
       <polyline
         points={pts(a)}
         fill="none"
