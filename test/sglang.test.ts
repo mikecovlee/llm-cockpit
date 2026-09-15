@@ -56,3 +56,29 @@ test("latency histograms present with counts", () => {
   expect(s.latency.ttft!.count).toBeGreaterThan(0);
   expect(s.latency.ttft!.sum).toBeGreaterThan(0);
 });
+
+test("availability + prefill effective mode split", () => {
+  expect(s.cache.kvAvailableTokens).toBe(484.0);
+  expect(s.extras["mambaAvailableTokens"]).toBe(4.0);
+  expect(s.throughput.prefillEffectiveTotal).toBeCloseTo(1.579245e6 + 1.279936e7 + 750720.0, 3);
+  expect(s.cache.deviceHitTotal).toBe(1.279936e7);
+  expect(s.cache.hostHitTotal).toBe(750720.0);
+  expect(s.cache.storageHitTotal).toBe(0.0);
+  expect(s.capabilities.specDecode).toBe(false);
+  expect(s.extras["specAcceptRate"]).toBeUndefined();
+});
+
+test("spec decode extras appear only when active", () => {
+  const p2 = parsePrometheus(
+    [
+      'sglang:spec_accept_rate{model_name="m"} 0.82',
+      'sglang:spec_accept_length{model_name="m"} 2.5',
+      "sglang:estimated_flops_per_gpu_total 4e12",
+    ].join("\n"),
+  );
+  const s2 = normalizeSglang(p2, { model: null, version: null }, 1);
+  expect(s2.capabilities.specDecode).toBe(true);
+  expect(s2.extras["specAcceptRate"]).toBe(0.82);
+  expect(s2.extras["specAcceptLength"]).toBe(2.5);
+  expect(s2.extras["mfuFlopsTotal"]).toBe(4e12);
+});

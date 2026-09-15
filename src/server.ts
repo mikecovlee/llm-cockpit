@@ -25,7 +25,7 @@ import {
   publicProviders,
   resolveChatProviders,
 } from "./chat/providers.ts";
-import { histogramToQuantiles } from "./core/derive.ts";
+import { deriveRates, histogramToQuantiles } from "./core/derive.ts";
 import { withSseKeepalive } from "./core/keepalive.ts";
 import type { HistogramBuckets, Snapshot } from "./core/model.ts";
 import { findHistogram, findSeries, parsePrometheus } from "./core/prom.ts";
@@ -164,6 +164,8 @@ const startedAt = Date.now();
 
 async function refresh(t: Target, adapter: EngineAdapter, ring: Ring, ts: number): Promise<void> {
   const snap = await adapter.sample(t.url, ts);
+  const prev = ring.latest();
+  deriveRates(prev, snap, prev === null ? 0 : ts - prev.ts);
   ring.push(snap);
   t.status = snap.engine.healthy ? "online" : "offline";
   if (snap.engine.model !== null) t.model = snap.engine.model;
@@ -234,6 +236,7 @@ function toChartPoint(s: Snapshot) {
     throughput: {
       generationTps: s.throughput.generationTps,
       prefillTps: s.throughput.prefillTps,
+      prefillEffectiveTps: s.throughput.prefillEffectiveTps,
     },
     cache: {
       kvUsagePct: s.cache.kvUsagePct,

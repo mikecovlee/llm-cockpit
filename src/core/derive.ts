@@ -1,6 +1,6 @@
 /** Derivation helpers: quantiles from histogram buckets, counter rates. */
 
-import type { HistogramBuckets } from "./model.ts";
+import type { HistogramBuckets, Snapshot } from "./model.ts";
 
 /**
  * Linear-interpolated quantile over cumulative histogram buckets.
@@ -58,4 +58,34 @@ export function rate(prev: number | null, now: number | null, dtMs: number): num
   const r = (now - prev) / (dtMs / 1000);
   if (!Number.isFinite(r) || r < 0) return null;
   return r;
+}
+
+/**
+ * Fill derived per-second fields on `next` from the previous sample.
+ * Called by the poll loop before the snapshot enters the ring; with no
+ * previous sample every derived field stays null (first paint shows gauges
+ * only, rates appear from the second poll).
+ */
+export function deriveRates(prev: Snapshot | null, next: Snapshot, dtMs: number): void {
+  if (prev === null) return;
+  const r = (p: number | null, n: number | null): number | null => rate(p, n, dtMs);
+  next.throughput.requestsPerSec = r(
+    prev.counts.requestsCompletedTotal,
+    next.counts.requestsCompletedTotal,
+  );
+  next.throughput.prefillEffectiveTps = r(
+    prev.throughput.prefillEffectiveTotal,
+    next.throughput.prefillEffectiveTotal,
+  );
+  next.cache.deviceHitTps = r(prev.cache.deviceHitTotal, next.cache.deviceHitTotal);
+  next.cache.hostHitTps = r(prev.cache.hostHitTotal, next.cache.hostHitTotal);
+  next.cache.storageHitTps = r(prev.cache.storageHitTotal, next.cache.storageHitTotal);
+  const fl = r(prev.extras["mfuFlopsTotal"] ?? null, next.extras["mfuFlopsTotal"] ?? null);
+  if (fl !== null) next.extras["tflopsAllGpus"] = fl / 1e12;
+  const rd = r(prev.extras["mfuReadBytesTotal"] ?? null, next.extras["mfuReadBytesTotal"] ?? null);
+  const wr = r(
+    prev.extras["mfuWriteBytesTotal"] ?? null,
+    next.extras["mfuWriteBytesTotal"] ?? null,
+  );
+  if (rd !== null && wr !== null) next.extras["memBandwidthGbsAllGpus"] = (rd + wr) / 1e9;
 }

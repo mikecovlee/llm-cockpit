@@ -23,6 +23,10 @@ function counter(p: Parsed, name: string): number | null {
   return sumSeries(p, `${G}${name}`) ?? sumSeries(p, `${G_ALT}${name}`);
 }
 
+function labeledCounter(p: Parsed, name: string, mode: string): number | null {
+  return sumSeries(p, `${G}${name}`, { mode }) ?? sumSeries(p, `${G_ALT}${name}`, { mode });
+}
+
 function histogram(p: Parsed, name: string): HistogramBuckets | null {
   const h = findHistogram(p, `${G}${name}`) ?? findHistogram(p, `${G_ALT}${name}`);
   if (h === null) return null;
@@ -55,6 +59,28 @@ export function normalizeSglang(p: Parsed, meta: AdapterMeta, ts: number): Snaps
   s.cache.hostUsedTokens = gauge(p, "hicache_host_used_tokens");
   s.cache.hostTotalTokens = gauge(p, "hicache_host_total_tokens");
   s.faults.retractedTotal = counter(p, "num_retracted_reqs");
+
+  s.cache.kvAvailableTokens = gauge(p, "kv_available_tokens");
+  const mambaAvail = gauge(p, "mamba_available_tokens");
+  if (mambaAvail !== null) s.extras["mambaAvailableTokens"] = mambaAvail;
+  s.throughput.prefillEffectiveTotal = counter(p, "prefill_effective_tokens_total");
+  s.cache.deviceHitTotal = labeledCounter(p, "prefill_effective_tokens_total", "device_hit");
+  s.cache.hostHitTotal = labeledCounter(p, "prefill_effective_tokens_total", "host_hit");
+  s.cache.storageHitTotal = labeledCounter(p, "prefill_effective_tokens_total", "storage_hit");
+
+  const specRate = gauge(p, "spec_accept_rate");
+  if (specRate !== null && specRate > 0) {
+    s.capabilities.specDecode = true;
+    s.extras["specAcceptRate"] = specRate;
+    const specLen = gauge(p, "spec_accept_length");
+    if (specLen !== null) s.extras["specAcceptLength"] = specLen;
+  }
+  const flops = counter(p, "estimated_flops_per_gpu_total");
+  if (flops !== null) s.extras["mfuFlopsTotal"] = flops;
+  const rBytes = counter(p, "estimated_read_bytes_per_gpu_total");
+  if (rBytes !== null) s.extras["mfuReadBytesTotal"] = rBytes;
+  const wBytes = counter(p, "estimated_write_bytes_per_gpu_total");
+  if (wBytes !== null) s.extras["mfuWriteBytesTotal"] = wBytes;
 
   s.latency.ttft = histogram(p, "time_to_first_token_seconds");
   s.latency.tpot = histogram(p, "inter_token_latency_seconds");

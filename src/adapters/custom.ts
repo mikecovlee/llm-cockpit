@@ -24,7 +24,7 @@ export interface CustomAdapterSpec {
 
 const FIELD_GROUPS: Record<string, string[]> = {
   requests: ["running", "queued", "swapped", "paused"],
-  throughput: ["generationTps", "prefillTps", "requestsPerSec"],
+  throughput: ["generationTps", "prefillTps", "requestsPerSec", "prefillEffectiveTotal"],
   tokens: ["promptTotal", "generationTotal", "cachedTotal"],
   counts: ["requestsCompletedTotal"],
   cache: [
@@ -37,6 +37,10 @@ const FIELD_GROUPS: Record<string, string[]> = {
     "cumulativeHitRate",
     "hostUsedTokens",
     "hostTotalTokens",
+    "kvAvailableTokens",
+    "deviceHitTotal",
+    "hostHitTotal",
+    "storageHitTotal",
   ],
   faults: ["retractedTotal", "preemptedTotal"],
   latency: ["ttft", "tpot", "e2e", "queueWait"],

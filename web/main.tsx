@@ -32,6 +32,8 @@ interface Snapshot {
     generationTps: number | null;
     prefillTps: number | null;
     requestsPerSec: number | null;
+    prefillEffectiveTotal: number | null;
+    prefillEffectiveTps: number | null;
   };
   tokens: {
     promptTotal: number | null;
@@ -49,6 +51,13 @@ interface Snapshot {
     cumulativeHitRate: number | null;
     hostUsedTokens: number | null;
     hostTotalTokens: number | null;
+    kvAvailableTokens: number | null;
+    deviceHitTotal: number | null;
+    hostHitTotal: number | null;
+    storageHitTotal: number | null;
+    deviceHitTps: number | null;
+    hostHitTps: number | null;
+    storageHitTps: number | null;
   };
   latency: {
     ttft: HistBuckets | null;
@@ -130,7 +139,11 @@ interface ChartPoint {
     paused: number | null;
     swapped: number | null;
   };
-  throughput: { generationTps: number | null; prefillTps: number | null };
+  throughput: {
+    generationTps: number | null;
+    prefillTps: number | null;
+    prefillEffectiveTps: number | null;
+  };
   cache: {
     kvUsagePct: number | null;
     hostUsedTokens: number | null;
@@ -737,6 +750,13 @@ function App() {
       color: "#fb923c",
     });
   }
+  if (hasValue((s) => s.throughput.prefillEffectiveTps)) {
+    tpSeries.push({
+      name: "prefill effective tok/s",
+      data: g((s) => s.throughput.prefillEffectiveTps),
+      color: "#60a5fa",
+    });
+  }
 
   const kvSeries: Series[] = [
     {
@@ -896,6 +916,24 @@ function App() {
                   <Stat label="prefill" value={fmtNum(snap.throughput.prefillTps)} sub="tok/s" />
                 ) : null}
               </div>
+              {snap !== null && snap.throughput.requestsPerSec !== null ? (
+                <Row
+                  label="requests"
+                  value={`${snap.throughput.requestsPerSec.toFixed(2)} req/s`}
+                />
+              ) : null}
+              {snap !== null && (snap.extras["tflopsAllGpus"] ?? null) !== null ? (
+                <Row
+                  label="est. compute (all GPUs)"
+                  value={`${(snap.extras["tflopsAllGpus"] ?? 0).toFixed(1)} TFLOPS`}
+                />
+              ) : null}
+              {snap !== null && (snap.extras["memBandwidthGbsAllGpus"] ?? null) !== null ? (
+                <Row
+                  label="est. mem bandwidth"
+                  value={`${(snap.extras["memBandwidthGbsAllGpus"] ?? 0).toFixed(0)} GB/s`}
+                />
+              ) : null}
               <LineChart series={tpSeries} labels={labels} />
             </Card>
 
@@ -915,6 +953,17 @@ function App() {
                         value={`${fmtTok(kv.kvUsedTokens)} / ${fmtTok(kv.kvTotalTokens)}`}
                       />
                       <Row label="cache hit rate" value={fmtPct(hitRate)} />
+                      {kv.kvAvailableTokens !== null ? (
+                        <Row label="KV available" value={fmtTok(kv.kvAvailableTokens)} />
+                      ) : null}
+                      {kv.deviceHitTps !== null ||
+                      kv.hostHitTps !== null ||
+                      kv.storageHitTps !== null ? (
+                        <Row
+                          label="hits dev/host/storage tok/s"
+                          value={`${fmtNum(kv.deviceHitTps)} / ${fmtNum(kv.hostHitTps)} / ${fmtNum(kv.storageHitTps)}`}
+                        />
+                      ) : null}
                       {hostPct !== null ? (
                         <Row label="host tier (L2)" value={fmtPct(hostPct)} />
                       ) : null}
@@ -996,6 +1045,18 @@ function App() {
                 <Row
                   label="forward occupancy"
                   value={fmtPct(snap.extras["fwdOccupancy"] ?? null)}
+                />
+              ) : null}
+              {snap !== null && (snap.extras["mambaAvailableTokens"] ?? null) !== null ? (
+                <Row
+                  label="mamba slots available"
+                  value={fmtNum(snap.extras["mambaAvailableTokens"] ?? null, 0)}
+                />
+              ) : null}
+              {snap !== null && (snap.extras["specAcceptRate"] ?? null) !== null ? (
+                <Row
+                  label="spec accept rate / len"
+                  value={`${((snap.extras["specAcceptRate"] ?? 0) * 100).toFixed(1)}% / ${fmtNum(snap.extras["specAcceptLength"] ?? null)}`}
                 />
               ) : null}
               {snap === null ? <div className="empty">no data</div> : null}
