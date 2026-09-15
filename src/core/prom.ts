@@ -163,17 +163,33 @@ export function sumSeries(
   return total;
 }
 
+/** Merge every series of a histogram name: bucket counts summed per upper
+ * bound, sum/count added — correct aggregation across label splits (dp_rank,
+ * model), identity for the usual single series. */
 export function findHistogram(
   p: Parsed,
   name: string,
   labelMatch?: Record<string, string>,
 ): ParsedHistogram | null {
+  let acc: ParsedHistogram | null = null;
+  const byUpper = new Map<number, number>();
   for (const h of p.histograms) {
     if (h.name !== name) continue;
     if (labelMatch !== undefined && !matchesLabels(h.labels, labelMatch)) continue;
-    return h;
+    for (const b of h.buckets) {
+      byUpper.set(b.upper, (byUpper.get(b.upper) ?? 0) + b.count);
+    }
+    if (acc === null) {
+      acc = { name: h.name, labels: h.labels, buckets: [], sum: 0, count: 0 };
+    }
+    acc.sum += h.sum;
+    acc.count += h.count;
   }
-  return null;
+  if (acc === null) return null;
+  acc.buckets = [...byUpper.entries()]
+    .map(([upper, count]) => ({ upper, count }))
+    .sort((a, b) => a.upper - b.upper);
+  return acc;
 }
 
 function matchesLabels(

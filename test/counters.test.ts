@@ -31,7 +31,7 @@ test("sglang counters split by labels are summed, not first-series", () => {
 
 test("sglang derives cumulative cache hit rate from counters", () => {
   const s = normalizeSglang(parsePrometheus(sglangSplit), { model: null, version: null }, 1);
-  expect(s.cache.rollingHitRate).toBeCloseTo((49162624 + 7406912) / (429 + 61824949), 9);
+  expect(s.cache.cumulativeHitRate).toBeCloseTo((49162624 + 7406912) / (429 + 61824949), 9);
 });
 
 test("vllm label-split counters are summed", () => {

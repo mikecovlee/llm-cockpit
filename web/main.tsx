@@ -46,7 +46,7 @@ interface Snapshot {
     hitRate: number | null;
     prefixHitsTotal: number | null;
     prefixQueriesTotal: number | null;
-    rollingHitRate: number | null;
+    cumulativeHitRate: number | null;
     hostUsedTokens: number | null;
     hostTotalTokens: number | null;
   };
@@ -286,11 +286,13 @@ function Chat() {
   const addFiles = (files: FileList | null): void => {
     if (files === null || files.length === 0) return;
     setAttachError(null);
+    let room = 4 - pendingImages.length;
     for (const file of Array.from(files)) {
-      if (pendingImages.length >= 4) {
+      if (room <= 0) {
         setAttachError("Up to 4 images per message.");
         break;
       }
+      room -= 1;
       if (file.size > 8 * 1024 * 1024) {
         setAttachError(`${file.name} exceeds 8MB — skipped.`);
         continue;
@@ -448,7 +450,10 @@ function Chat() {
       }
     } catch (e) {
       if ((e as { name?: string })?.name !== "AbortError") {
-        acc = acc === "" ? `**error**\n\n${String(e)}` : acc;
+        acc =
+          acc === ""
+            ? `**error**\n\n${String(e)}`
+            : `${acc}\n\n**[stream interrupted]** ${String(e)}`;
       }
     }
     setMsgs((prev) => {
@@ -706,7 +711,7 @@ function App() {
     kv.hostTotalTokens > 0
       ? kv.hostUsedTokens / kv.hostTotalTokens
       : null;
-  const hitRate = kv !== null ? (kv.rollingHitRate ?? kv.hitRate) : null;
+  const hitRate = kv !== null ? (kv.cumulativeHitRate ?? kv.hitRate) : null;
 
   if (booted && targets.length === 0) {
     return (
@@ -788,7 +793,7 @@ function App() {
         </div>
       ) : null}
 
-      {view === "monitor" ? (
+      <div className={view === "monitor" ? undefined : "hidden"}>
         <>
           <section className="grid4">
             <Card title="requests">
@@ -930,9 +935,10 @@ function App() {
             </Card>
           </section>
         </>
-      ) : (
+      </div>
+      <div className={view === "chat" ? undefined : "hidden"}>
         <Chat />
-      )}
+      </div>
     </div>
   );
 }

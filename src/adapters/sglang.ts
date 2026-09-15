@@ -36,18 +36,20 @@ export function normalizeSglang(p: Parsed, meta: AdapterMeta, ts: number): Snaps
   s.engine.version = meta.version;
   s.engine.healthy = true;
 
-  s.requests.running = gauge(p, "num_running_reqs");
-  s.requests.queued = gauge(p, "num_queue_reqs");
-  s.requests.paused = gauge(p, "num_paused_reqs");
+  // additive per-rank gauges are summed across label splits; percentage and
+  // pool-total gauges take the first series (see README limitations)
+  s.requests.running = counter(p, "num_running_reqs");
+  s.requests.queued = counter(p, "num_queue_reqs");
+  s.requests.paused = counter(p, "num_paused_reqs");
 
-  s.throughput.generationTps = gauge(p, "gen_throughput");
+  s.throughput.generationTps = counter(p, "gen_throughput");
   s.tokens.promptTotal = counter(p, "prompt_tokens_total");
   s.tokens.generationTotal = counter(p, "generation_tokens_total");
   s.tokens.cachedTotal = counter(p, "cached_tokens_total");
   s.counts.requestsCompletedTotal = counter(p, "num_requests_total");
 
   s.cache.kvUsagePct = gauge(p, "full_token_usage");
-  s.cache.kvUsedTokens = gauge(p, "kv_used_tokens");
+  s.cache.kvUsedTokens = counter(p, "kv_used_tokens");
   s.cache.kvTotalTokens = gauge(p, "max_total_num_tokens");
   s.cache.hitRate = gauge(p, "cache_hit_rate");
   s.cache.hostUsedTokens = gauge(p, "hicache_host_used_tokens");
@@ -70,19 +72,9 @@ export function normalizeSglang(p: Parsed, meta: AdapterMeta, ts: number): Snaps
   s.extras["fwdOccupancy"] = gauge(p, "fwd_occupancy");
 
   if (s.tokens.cachedTotal !== null && s.tokens.promptTotal !== null && s.tokens.promptTotal > 0) {
-    s.cache.rollingHitRate = Math.min(1, s.tokens.cachedTotal / s.tokens.promptTotal);
+    s.cache.cumulativeHitRate = Math.min(1, s.tokens.cachedTotal / s.tokens.promptTotal);
+    s.capabilities.prefixCache = true;
   }
-
-  if (
-    s.cache.hitRate === null &&
-    s.cache.prefixHitsTotal !== null &&
-    s.cache.prefixQueriesTotal !== null
-  ) {
-    if (s.cache.prefixQueriesTotal > 0) {
-      s.cache.rollingHitRate = s.cache.prefixHitsTotal / s.cache.prefixQueriesTotal;
-    }
-  }
-  if (s.cache.prefixHitsTotal !== null) s.capabilities.prefixCache = true;
 
   return s;
 }

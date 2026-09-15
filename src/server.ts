@@ -18,6 +18,7 @@ import { fetchText } from "./adapters/http.ts";
 import { autoDetect, builtins } from "./adapters/index.ts";
 import type { EngineAdapter } from "./adapters/types.ts";
 import { type ChatConfig, chatStream, listModels } from "./chat/openai.ts";
+import { withSseKeepalive } from "./core/keepalive.ts";
 import { findHistogram, findSeries, parsePrometheus } from "./core/prom.ts";
 import { Ring, ringCapacity, type Target } from "./core/registry.ts";
 
@@ -90,6 +91,10 @@ const rings: Ring[] = [];
 for (let i = 0; i < targetConfigs.length; i++) {
   const tc = targetConfigs[i]!;
   const id = tc.id ?? `t${i + 1}`;
+  if (typeof tc?.url !== "string") {
+    console.error(`[config] target '${id}': url must be a string — skipped`);
+    continue;
+  }
 
   let adapter: EngineAdapter;
   let adapterId: string;
@@ -154,10 +159,14 @@ async function refreshAll(): Promise<void> {
   await Promise.all(targets.map((t, i) => refresh(t, adapters[i]!, rings[i]!, ts)));
 }
 
+let timer: ReturnType<typeof setTimeout> | null = null;
+const schedulePoll = (): void => {
+  timer = setTimeout(() => {
+    void refreshAll().finally(schedulePoll);
+  }, serverCfg.pollIntervalS * 1000);
+};
 await refreshAll();
-const timer = setInterval(() => {
-  void refreshAll();
-}, serverCfg.pollIntervalS * 1000);
+schedulePoll();
 
 function targetIndex(name: string | null): number {
   if (name === null || name === undefined) return 0;
@@ -171,10 +180,38 @@ function jsonResponse(data: unknown, status = 200): Response {
   });
 }
 
+/** Read a request body enforcing a hard byte cap regardless of encoding or
+ * absent content-length headers (chunked bodies included). */
+async function readCappedText(req: Request, maxBytes: number): Promise<string | null> {
+  const declared = Number(req.headers.get("content-length") ?? "0");
+  if (declared > maxBytes) return null;
+  if (req.body === null) return "";
+  const reader = req.body.getReader();
+  const dec = new TextDecoder();
+  let total = 0;
+  let out = "";
+  for (;;) {
+    const r = await reader.read();
+    if (r.done) break;
+    if (r.value !== undefined) {
+      total += r.value.byteLength;
+      if (total > maxBytes) {
+        await reader.cancel();
+        return null;
+      }
+      out += dec.decode(r.value, { stream: true });
+    }
+  }
+  out += dec.decode();
+  return out;
+}
+
 async function validateMappingHandler(req: Request): Promise<Response> {
+  const rawBody = await readCappedText(req, 1024 * 1024);
+  if (rawBody === null) return jsonResponse({ ok: false, errors: ["payload exceeds 1MB"] }, 413);
   let body: { spec?: CustomAdapterSpec; target_url?: string } | null = null;
   try {
-    body = (await req.json()) as { spec?: CustomAdapterSpec; target_url?: string };
+    body = JSON.parse(rawBody) as { spec?: CustomAdapterSpec; target_url?: string };
   } catch {
     return jsonResponse({ ok: false, errors: ["body must be valid JSON"] }, 400);
   }
@@ -266,66 +303,6 @@ const MIME: Record<string, string> = {
   txt: "text/plain; charset=utf-8",
 };
 
-/**
- * Interleave SSE comment pings into a proxied stream so the connection shows
- * activity even while the engine is stalled in queue or long prefill.
- */
-function withSseKeepalive(src: ReadableStream<Uint8Array>): ReadableStream<Uint8Array> {
-  const enc = new TextEncoder();
-  const reader = src.getReader();
-  let active = true;
-  let timer: ReturnType<typeof setInterval> | null = null;
-  const halt = (): void => {
-    active = false;
-    if (timer !== null) {
-      clearInterval(timer);
-      timer = null;
-    }
-  };
-  return new ReadableStream<Uint8Array>({
-    start(c) {
-      timer = setInterval(() => {
-        if (!active) return;
-        try {
-          c.enqueue(enc.encode(": ping\n\n"));
-        } catch {
-          halt();
-        }
-      }, 15000);
-      const pump = (): void => {
-        reader
-          .read()
-          .then(({ done, value }) => {
-            if (!active) return;
-            if (done) {
-              halt();
-              c.close();
-              return;
-            }
-            if (value !== undefined) {
-              try {
-                c.enqueue(value);
-              } catch {
-                halt();
-              }
-            }
-            pump();
-          })
-          .catch(() => {
-            if (!active) return;
-            halt();
-            c.error(new Error("upstream stream failed"));
-          });
-      };
-      pump();
-    },
-    cancel(reason) {
-      halt();
-      reader.cancel(reason).catch(() => {});
-    },
-  });
-}
-
 const server = serve({
   hostname: serverCfg.host,
   port: serverCfg.port,
@@ -398,12 +375,11 @@ const server = serve({
     if (u.pathname === "/api/chat/stream") {
       if (req.method !== "POST")
         return jsonResponse({ ok: false, error: "method not allowed" }, 405);
-      const len = Number(req.headers.get("content-length") ?? "0");
-      if (len > 12 * 1024 * 1024)
-        return jsonResponse({ ok: false, error: "payload exceeds 12MB" }, 413);
+      const raw = await readCappedText(req, 12 * 1024 * 1024);
+      if (raw === null) return jsonResponse({ ok: false, error: "payload exceeds 12MB" }, 413);
       let payload: unknown;
       try {
-        payload = await req.json();
+        payload = JSON.parse(raw) as unknown;
       } catch {
         return jsonResponse({ ok: false, error: "body must be valid JSON" }, 400);
       }
@@ -470,7 +446,7 @@ for (const t of targets) {
 }
 
 process.on("SIGTERM", () => {
-  clearInterval(timer);
+  if (timer !== null) clearTimeout(timer);
   server.stop();
   process.exit(0);
 });

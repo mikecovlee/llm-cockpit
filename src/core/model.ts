@@ -52,8 +52,8 @@ export interface SnapshotCache {
   hitRate: number | null;
   prefixHitsTotal: number | null;
   prefixQueriesTotal: number | null;
-  /** Derived from prefix hits/queries when the engine reports no hitRate. */
-  rollingHitRate: number | null;
+  /** Cumulative hit ratio derived from engine counters (all-time). */
+  cumulativeHitRate: number | null;
   /** Host-tier (L2, e.g. SGLang hicache) usage. */
   hostUsedTokens: number | null;
   hostTotalTokens: number | null;
@@ -109,7 +109,7 @@ export function emptySnapshot(ts = Date.now(), adapter = "unknown"): Snapshot {
       hitRate: null,
       prefixHitsTotal: null,
       prefixQueriesTotal: null,
-      rollingHitRate: null,
+      cumulativeHitRate: null,
       hostUsedTokens: null,
       hostTotalTokens: null,
     },

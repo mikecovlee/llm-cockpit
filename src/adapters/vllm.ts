@@ -75,7 +75,7 @@ export function normalizeVllm(p: Parsed, meta: AdapterMeta, ts: number): Snapsho
     s.cache.prefixQueriesTotal !== null
   ) {
     if (s.cache.prefixQueriesTotal > 0) {
-      s.cache.rollingHitRate = s.cache.prefixHitsTotal / s.cache.prefixQueriesTotal;
+      s.cache.cumulativeHitRate = s.cache.prefixHitsTotal / s.cache.prefixQueriesTotal;
     }
   }
   return s;

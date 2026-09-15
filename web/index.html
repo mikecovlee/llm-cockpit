@@ -3,8 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>LLM Cockpit</title>
-    <style>
+    <title>LLM Cockpit</title>    <style>
       * {
         box-sizing: border-box;
       }
@@ -309,8 +308,56 @@
         max-height: 160px;
         outline: none;
       }
+      .hidden {
+        display: none;
+      }
       .chat-input textarea:focus {
         border-color: rgba(56, 189, 248, 0.5);
+      }
+      /* highlight.js github-dark theme subset (vendored; no CDN, works offline) */
+      .hljs {
+        color: #e6edf3;
+        background: #161b22;
+      }
+      .hljs-comment,
+      .hljs-quote {
+        color: #8b949e;
+      }
+      .hljs-keyword,
+      .hljs-selector-tag,
+      .hljs-type {
+        color: #ff7b72;
+      }
+      .hljs-string,
+      .hljs-regexp,
+      .hljs-meta .hljs-string {
+        color: #a5d6ff;
+      }
+      .hljs-number,
+      .hljs-literal,
+      .hljs-variable,
+      .hljs-template-variable,
+      .hljs-tag .hljs-attr {
+        color: #79c0ff;
+      }
+      .hljs-title,
+      .hljs.title.function_,
+      .hljs-section,
+      .hljs-name {
+        color: #d2a8ff;
+      }
+      .hljs-built_in,
+      .hljs-symbol,
+      .hljs-bullet {
+        color: #ffa657;
+      }
+      .hljs-addition {
+        color: #34d399;
+        background: rgba(52, 211, 153, 0.1);
+      }
+      .hljs-deletion {
+        color: #f87171;
+        background: rgba(248, 113, 113, 0.1);
       }
       .chat-input .attach-btn {
         width: 34px;
@@ -396,7 +443,6 @@
         text-align: center;
       }
     </style>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.10.0/build/styles/github-dark.min.css" />
   </head>
   <body>
     <div id="root"></div>

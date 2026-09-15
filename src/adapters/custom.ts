@@ -34,7 +34,7 @@ const FIELD_GROUPS: Record<string, string[]> = {
     "hitRate",
     "prefixHitsTotal",
     "prefixQueriesTotal",
-    "rollingHitRate",
+    "cumulativeHitRate",
     "hostUsedTokens",
     "hostTotalTokens",
   ],

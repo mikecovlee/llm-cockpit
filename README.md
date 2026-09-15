@@ -14,13 +14,15 @@ model — adding a new engine means one small adapter file, not a UI rewrite.
 ## Quick start
 
 ```bash
-make run     # dev server in a container → http://<server-ip>:7777 (binds 0.0.0.0)
-make test    # unit tests (32) in a container
+make run     # self-installing dev server → http://<server-ip>:7777 (binds 0.0.0.0)
+make test    # unit tests in a container
 make image   # build the runtime image
 ```
 
-Requirements: Docker. A running inference engine that exposes Prometheus metrics
-at `/metrics` (SGLang: start with `--enable-metrics`).
+Requirements: Docker only (a `node_modules` docker volume is created on first
+use — the host working tree is never written to). You also want a running
+inference engine that exposes Prometheus metrics at `/metrics`
+(SGLang: start with `--enable-metrics`).
 
 Zero-config: monitors `http://127.0.0.1:8080` with the engine auto-detected
 (SGLang `/get_server_info`, vLLM `/version`). Multiple targets, custom adapters,
@@ -47,14 +49,19 @@ Polling is every 2 s against the server's in-memory ring (15 min window).
 The chat window talks to any OpenAI-compatible API (default: the same engine at
 `/v1`). Streaming responses render markdown with syntax highlighting; reasoning
 models get a collapsible "thinking" block. `⏎` sends, `⇧⏎` inserts a newline,
-stop aborts in-flight generation.
+stop aborts in-flight generation. The proxy injects SSE keepalive comments every
+15 s, so queue/prefill stalls of minutes survive any socket idle timeout; a
+10-minute absolute deadline bounds truly dead upstreams.
 
-**Vision**: the `+` button attaches up to 4 images to a message. Large images are
+**Vision**: the `+` button attaches up to 4 images (original files ≤ 8 MB) to a
+message; text and images coexist in one message. Large images are
 auto-downscaled in the browser (≤ 1280px per side, JPEG q0.85) before upload — a
 4000×3000 phone photo would otherwise expand to 100k+ vision tokens and stall the
 engine's prefill for minutes. Images are sent as inline base64 `image_url` content
-parts (proxy hard cap: 12 MB), so the same endpoint serves text and multimodal
-traffic — the chat model must be vision-capable (e.g. a Qwen-VL serving).
+parts (proxy hard cap: 12 MB, enforced on the socket so chunked bodies cannot
+bypass it). The chat model must be vision-capable (e.g. a Qwen-VL serving).
+
+![chat with image](screenshots/m5-image-chat.png)
 
 ## Custom engines (no code)
 
@@ -95,7 +102,7 @@ metrics are missing): `POST /api/validate-mapping`.
 | `GET /api/history?target=id&sec=600` | rolling ring (≤ 15 min @ 2 s) |
 | `POST /api/validate-mapping` | validate a custom adapter + live probe |
 | `GET /api/chat/models` | model list from the configured chat endpoint |
-| `POST /api/chat/stream` | SSE proxy → OpenAI `chat/completions` (stream) |
+| `POST /api/chat/stream` | SSE proxy → OpenAI `chat/completions` (stream, ≤12 MB body) |
 
 All numeric fields in the canonical model are nullable — the shape is stable
 across engines; capabilities (`mamba`, `hicache`, `prefixCache`) tell the UI
@@ -113,11 +120,34 @@ test/          unit tests + engine fixtures
 
 ## Development
 
-The whole toolchain runs in containers; the host stays clean (node_modules lives
-in the docker volume `cockpit_mod`). `make typecheck` / `make lint` / `make test`
-wrap the container equivalents. `bun run scripts/build.ts` bundles the server
-(target bun, zero runtime deps) and the web app (browser). `make binary`
-produces a single self-contained executable via `bun build --compile`.
+The whole toolchain runs in containers; the host stays clean (dependencies live
+in the `cockpit_mod` docker volume, build output in `cockpit_dist` — the working
+tree is never written to). `make typecheck` / `make lint` / `make test` wrap the
+container equivalents. `bun run scripts/build.ts` bundles the server (target
+bun, zero runtime deps) and the web app (browser, content-hashed asset name).
+`make binary` exports `../cockpit-dist/` containing the compiled `llm-cockpit`
+executable **plus its sibling `web/` asset folder** — run it from that directory
+(the UI needs those assets at runtime; the API works without them).
+Browser QA harness and conventions: see [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## Security
+
+**LLM Cockpit ships with no authentication** — by design it is a single-operator
+console for a trusted network, bound to `0.0.0.0` so you can reach it from your
+laptop. Anyone (or anything) that can open the port can read your engine's
+metrics and spend GPU time through the chat proxy, and `POST /api/validate-mapping`
+will fetch URLs you give it. Keep it on a trusted LAN or VPN; firewall the port
+otherwise; set `server.host: 127.0.0.1` (plus a reverse proxy with auth) for
+anything stricter.
+
+## Limitations
+
+- Gauge/percentage metrics that are reported per data-parallel rank show the
+  first series in multi-rank (DP>1) deployments; counters are summed across all
+  label splits.
+- Images in chat history are re-sent with every follow-up turn (standard
+  OpenAI multimodal semantics) — long image-heavy conversations cost vision
+  tokens each turn; start a new conversation to reset.
 
 ## 中文说明
 
@@ -131,10 +161,16 @@ llm-cockpit 是一个多引擎推理控制台:一个进程里同时提供**实�
   (能力驱动,缺失即隐藏)。
 - **对话窗口**:代理到任意 OpenAI-compatible API,支持 SSE 流式、reasoning
   模型 thinking 折叠、markdown + 代码高亮、随时停止;`+` 按钮可附加图片
-  (每条最多 4 张,浏览器端自动压到 ≤1280px JPEG 再上传——原图直发会膨胀成
-  十几万 token 把引擎卡死;需视觉模型支持)。
+  (每条最多 4 张、单张原始文件 ≤8MB,浏览器端自动压到 ≤1280px JPEG 再上传——
+  原图直发会膨胀成十几万 token 把引擎卡死;需视觉模型支持)。文字与图片可在
+  同一条消息中共存。
 - **容器化工具链**:`make run / test / typecheck / lint / image / binary`
-  全部在容器内执行,不污染宿主机。
+  全部在容器内执行,不污染宿主机(依赖在 `cockpit_mod` 卷、构建产物在
+  `cockpit_dist` 卷,工作树不被写入;`make binary` 导出到 `../cockpit-dist/`)。
+- **安全**:控制台**不含任何鉴权**,默认监听 `0.0.0.0` 便于无头服务器远程访问。
+  能访问该端口者都能读取引擎指标、通过对话消耗 GPU,并让 `validate-mapping`
+  去请求其指定的 URL。请务必置于可信内网/VPN 并防火墙该端口;更严格的部署可设
+  `server.host: 127.0.0.1` 再配合带鉴权的反向代理。
 
 快速开始:`make run` → 打开 `http://<服务器IP>:7777`(默认监听 `0.0.0.0`,
 适配无头服务器;默认监控本机 8080 的 SGLang,自动探测引擎;SGLang 需
@@ -143,4 +179,4 @@ llm-cockpit 是一个多引擎推理控制台:一个进程里同时提供**实�
 
 ## License
 
-Apache-2.0 — see [LICENSE](LICENSE).
+Copyright 2026 mikecovlee — Apache-2.0, see [LICENSE](LICENSE).

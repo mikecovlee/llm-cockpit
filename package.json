@@ -3,6 +3,8 @@
   "version": "0.1.0",
   "description": "Multi-engine inference console: live metrics cockpit + OpenAI-compatible chat. Adapter-driven: SGLang, vLLM, custom engines.",
   "license": "Apache-2.0",
+  "keywords": ["llm", "inference", "monitoring", "observability", "sglang", "vllm", "openai"],
+  "engines": { "bun": ">=1.2.0" },
   "type": "module",
   "private": true,
   "scripts": {

@@ -23,7 +23,7 @@ test("vllm kv cache + prefix cache", () => {
   expect(s.cache.kvUsagePct).toBe(0.42);
   expect(s.cache.prefixHitsTotal).toBe(500);
   expect(s.cache.prefixQueriesTotal).toBe(1000);
-  expect(s.cache.rollingHitRate).toBeCloseTo(0.5, 10);
+  expect(s.cache.cumulativeHitRate).toBeCloseTo(0.5, 10);
   expect(s.capabilities.prefixCache).toBe(true);
 });
 
