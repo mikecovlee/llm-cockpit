@@ -20,6 +20,8 @@ import {
   saveSession,
   type WireMessage,
 } from "./chatPayload.ts";
+import { type Lang, t } from "./i18n.ts";
+import { readPrefs, savePrefs, type Theme } from "./prefs.ts";
 
 /* ---------- canonical model types (mirror of src/core/model.ts) ---------- */
 
@@ -184,12 +186,140 @@ interface ChartPoint {
   latency: { ttft: { p50: number | null; p90: number | null; p99: number | null } | null };
 }
 
-const fmtTime = (ts: number): string => new Date(ts).toLocaleTimeString("en-GB", { hour12: false });
+const fmtTime = (ts: number, lang: Lang): string =>
+  new Date(ts).toLocaleTimeString(lang === "zh" ? "zh-CN" : "en-GB", { hour12: false });
 
 const uid = (): string =>
   typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
     ? crypto.randomUUID()
     : `id-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+
+/* ---------- theme + language (UI prefs) ---------- */
+
+interface UIState {
+  theme: Theme;
+  lang: Lang;
+  setTheme: (v: Theme) => void;
+  setLang: (v: Lang) => void;
+}
+
+const UICtx = React.createContext<UIState>({
+  theme: "dark",
+  lang: "en",
+  setTheme: (): void => undefined,
+  setLang: (): void => undefined,
+});
+
+const useUI = (): UIState => React.useContext(UICtx);
+
+interface ChartPalette {
+  axis: string;
+  grid: string;
+  split: string;
+  legend: string;
+  blue: string;
+  green: string;
+  amber: string;
+  red: string;
+  violet: string;
+  orange: string;
+  pink: string;
+  blueLight: string;
+  teal: string;
+}
+
+const CHART: Record<Theme, ChartPalette> = {
+  dark: {
+    axis: "#6e7681",
+    grid: "#21262d",
+    split: "#1c2128",
+    legend: "#8b949e",
+    blue: "#38bdf8",
+    green: "#34d399",
+    amber: "#fbbf24",
+    red: "#f87171",
+    violet: "#a78bfa",
+    orange: "#fb923c",
+    pink: "#f472b6",
+    blueLight: "#60a5fa",
+    teal: "#2dd4bf",
+  },
+  light: {
+    axis: "#57606a",
+    grid: "#d0d7de",
+    split: "#e6ebf1",
+    legend: "#57606a",
+    blue: "#0284c7",
+    green: "#059669",
+    amber: "#d97706",
+    red: "#dc2626",
+    violet: "#7c3aed",
+    orange: "#ea580c",
+    pink: "#db2777",
+    blueLight: "#2563eb",
+    teal: "#0d9488",
+  },
+};
+
+function SunIcon(): React.ReactElement {
+  return (
+    <svg
+      width="13"
+      height="13"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      aria-hidden="true"
+    >
+      <circle cx="12" cy="12" r="4" />
+      <path d="M12 2v2m0 16v2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4M2 12h2m16 0h2M4.9 19.1l1.4-1.4m11.4-11.4 1.4-1.4" />
+    </svg>
+  );
+}
+
+function MoonIcon(): React.ReactElement {
+  return (
+    <svg
+      width="13"
+      height="13"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z" />
+    </svg>
+  );
+}
+
+function HeaderToggles(): React.ReactElement {
+  const ui = useUI();
+  return (
+    <>
+      <button
+        type="button"
+        className="icon-btn"
+        title={ui.lang === "en" ? t(ui.lang, "hdr.toZh") : t(ui.lang, "hdr.toEn")}
+        onClick={() => ui.setLang(ui.lang === "en" ? "zh" : "en")}
+      >
+        {ui.lang === "en" ? "中" : "EN"}
+      </button>
+      <button
+        type="button"
+        className="icon-btn"
+        title={ui.theme === "dark" ? t(ui.lang, "hdr.toLight") : t(ui.lang, "hdr.toDark")}
+        onClick={() => ui.setTheme(ui.theme === "dark" ? "light" : "dark")}
+      >
+        {ui.theme === "dark" ? <SunIcon /> : <MoonIcon />}
+      </button>
+    </>
+  );
+}
 
 /* ---------- echarts line chart ---------- */
 
@@ -200,6 +330,7 @@ interface Series {
 }
 
 function LineChart({ series, labels }: { series: Series[]; labels: string[] }) {
+  const { theme } = useUI();
   const ref = React.useRef<HTMLDivElement>(null);
   const chartRef = React.useRef<echarts.ECharts | null>(null);
 
@@ -223,6 +354,7 @@ function LineChart({ series, labels }: { series: Series[]; labels: string[] }) {
   React.useEffect(() => {
     const chart = chartRef.current;
     if (chart === null) return;
+    const c = CHART[theme];
     chart.setOption({
       backgroundColor: "transparent",
       grid: { left: 46, right: 26, top: series.length > 1 ? 30 : 18, bottom: 22 },
@@ -239,19 +371,19 @@ function LineChart({ series, labels }: { series: Series[]; labels: string[] }) {
       },
       legend:
         series.length > 1
-          ? { top: 0, textStyle: { color: "#8b949e", fontSize: 11 }, itemWidth: 14, itemHeight: 8 }
+          ? { top: 0, textStyle: { color: c.legend, fontSize: 11 }, itemWidth: 14, itemHeight: 8 }
           : undefined,
       xAxis: {
         type: "category",
         data: labels,
-        axisLabel: { color: "#6e7681", fontSize: 10 },
-        axisLine: { lineStyle: { color: "#21262d" } },
+        axisLabel: { color: c.axis, fontSize: 10 },
+        axisLine: { lineStyle: { color: c.grid } },
         boundaryGap: false,
       },
       yAxis: {
         type: "value",
-        axisLabel: { color: "#6e7681", fontSize: 10 },
-        splitLine: { lineStyle: { color: "#1c2128" } },
+        axisLabel: { color: c.axis, fontSize: 10 },
+        splitLine: { lineStyle: { color: c.split } },
       },
       series: series.map((s) => ({
         name: s.name,
@@ -263,7 +395,7 @@ function LineChart({ series, labels }: { series: Series[]; labels: string[] }) {
         itemStyle: { color: s.color },
       })),
     });
-  }, [series, labels]);
+  }, [series, labels, theme]);
 
   return <div ref={ref} className="chart" />;
 }
@@ -315,6 +447,7 @@ type ContentPart =
   | { type: "image_url"; image_url: { url: string } };
 
 function Bubble({ msg }: { msg: ChatMsg }) {
+  const { lang } = useUI();
   const ref = React.useRef<HTMLDivElement>(null);
   React.useEffect(() => {
     const el = ref.current;
@@ -327,37 +460,37 @@ function Bubble({ msg }: { msg: ChatMsg }) {
       const code = pre.querySelector("code");
       const ctl = document.createElement("div");
       ctl.className = "codectl";
-      const lang = document.createElement("span");
-      lang.textContent = code?.className.match(/language-([\w-]+)/)?.[1] ?? "code";
+      const langTag = document.createElement("span");
+      langTag.textContent = code?.className.match(/language-([\w-]+)/)?.[1] ?? t(lang, "chat.code");
       const btn = document.createElement("button");
       btn.type = "button";
-      btn.textContent = "copy";
+      btn.textContent = t(lang, "chat.copy");
       btn.addEventListener("click", () => {
         void copyText(code?.textContent ?? "").then((ok): void => {
           if (ok) {
-            btn.textContent = "copied";
+            btn.textContent = t(lang, "chat.copied");
             setTimeout(() => {
-              btn.textContent = "copy";
+              btn.textContent = t(lang, "chat.copy");
             }, 1500);
           }
         });
       });
-      ctl.append(lang, btn);
+      ctl.append(langTag, btn);
       pre.insertBefore(ctl, pre.firstChild);
     }
-  }, [msg.content]);
+  }, [msg.content, lang]);
   return (
     <div className={`bubble ${msg.role}`}>
       {msg.role === "user" && msg.images !== undefined && msg.images.length > 0 ? (
         <div className="thumbs">
           {msg.images.map((img) => (
-            <img key={img.id} src={img.url} alt="attachment" className="thumb" />
+            <img key={img.id} src={img.url} alt={t(lang, "chat.attachment")} className="thumb" />
           ))}
         </div>
       ) : null}
       {msg.thinking !== undefined && msg.thinking !== "" ? (
         <details className="thinking">
-          <summary>thinking</summary>
+          <summary>{t(lang, "chat.thinking")}</summary>
           <pre>{msg.thinking}</pre>
         </details>
       ) : null}
@@ -387,6 +520,15 @@ const splitSel = (v: string): { pid: string; model: string } | null => {
   return i < 0 ? null : { pid: v.slice(0, i), model: v.slice(i + 2) };
 };
 
+const chatErrText = (l: Lang, code: string): string =>
+  code === "no models"
+    ? t(l, "chat.noModels")
+    : code === "unreachable"
+      ? t(l, "chat.unreachable")
+      : code === "api-down"
+        ? t(l, "chat.apiDown")
+        : code;
+
 const initialSession = loadSession(safeLocalStorage());
 
 const parseNum = (v: string): number | null => {
@@ -396,6 +538,7 @@ const parseNum = (v: string): number | null => {
 };
 
 function Chat() {
+  const { lang } = useUI();
   const [sel, setSel] = React.useState<string>(initialSession?.sel ?? "");
   const [groups, setGroups] = React.useState<ProviderGroup[]>([]);
   const [chatErr, setChatErr] = React.useState<string | null>(null);
@@ -432,12 +575,12 @@ function Chat() {
     let room = 4 - pendingImages.length;
     for (const file of Array.from(files)) {
       if (room <= 0) {
-        setAttachError("Up to 4 images per message.");
+        setAttachError(t(lang, "chat.tooMany"));
         break;
       }
       room -= 1;
       if (file.size > 8 * 1024 * 1024) {
-        setAttachError(`${file.name} exceeds 8MB — skipped.`);
+        setAttachError(t(lang, "chat.tooBig", { name: file.name }));
         continue;
       }
       const reader = new FileReader();
@@ -462,7 +605,7 @@ function Chat() {
           setPendingImages((prev) => [...prev, { id: uid(), url }].slice(0, 4));
         };
         img.onerror = (): void => {
-          setAttachError(`${file.name} could not be decoded — skipped.`);
+          setAttachError(t(lang, "chat.decodeErr", { name: file.name }));
         };
         img.src = raw;
       };
@@ -522,7 +665,7 @@ function Chat() {
           setSel(`${def.info.id}::${first}`);
         }
       } catch {
-        if (!stop) setChatErr("cannot reach chat API");
+        if (!stop) setChatErr("api-down");
       }
     })();
     return () => {
@@ -677,8 +820,8 @@ function Chat() {
       if ((e as { name?: string })?.name !== "AbortError") {
         acc =
           acc === ""
-            ? `**error**\n\n${String(e)}`
-            : `${acc}\n\n**[stream interrupted]** ${String(e)}`;
+            ? `${t(lang, "chat.error")}\n\n${String(e)}`
+            : `${acc}\n\n${t(lang, "chat.streamInterrupted")} ${String(e)}`;
       }
     }
     setMsgs((prev) => {
@@ -688,7 +831,7 @@ function Chat() {
         next[next.length - 1] = {
           id: last.id,
           role: "assistant",
-          content: acc === "" ? "*(empty response)*" : acc,
+          content: acc === "" ? t(lang, "chat.emptyResponse") : acc,
           thinking: think === "" ? undefined : think,
           streaming: false,
           usage: finalUsage,
@@ -773,6 +916,17 @@ function Chat() {
   const curSel = splitSel(sel);
   const curThinking =
     curSel === null ? null : (groups.find((g) => g.info.id === curSel.pid)?.info.thinking ?? null);
+  const firstErr = groups[0]?.error;
+  const chatHint =
+    chatErr !== null
+      ? chatErrText(lang, chatErr)
+      : groups.length === 0
+        ? t(lang, "chat.loading")
+        : sel === ""
+          ? firstErr !== null && firstErr !== undefined
+            ? chatErrText(lang, firstErr)
+            : t(lang, "chat.noUsableModel")
+          : t(lang, "chat.hintOk");
 
   return (
     <div className="chat">
@@ -783,15 +937,21 @@ function Chat() {
           onChange={(e) => setSel(e.target.value)}
           disabled={busy}
         >
-          {groups.length === 0 ? <option value="">{chatErr ?? "loading models…"}</option> : null}
+          {groups.length === 0 ? (
+            <option value="">
+              {chatErr !== null ? chatErrText(lang, chatErr) : t(lang, "chat.loadingModels")}
+            </option>
+          ) : null}
           {groups.map((g) => (
             <optgroup
               key={g.info.id}
-              label={g.error !== null ? `${g.info.name} (${g.error})` : g.info.name}
+              label={
+                g.error !== null ? `${g.info.name} (${chatErrText(lang, g.error)})` : g.info.name
+              }
             >
               {g.models.length === 0 ? (
                 <option disabled value={`${g.info.id}::`}>
-                  no models
+                  {t(lang, "chat.noModels")}
                 </option>
               ) : (
                 g.models.map((m) => (
@@ -806,121 +966,114 @@ function Chat() {
         <button
           type="button"
           className="mini-btn"
-          title="chat parameters"
+          title={t(lang, "chat.paramsTitle")}
           onClick={() => setShowParams((v) => !v)}
         >
-          {showParams ? "params ▾" : "params ▸"}
+          {t(lang, "chat.paramsBtn", { icon: showParams ? "▾" : "▸" })}
         </button>
         {msgs.length > 0 && !busy ? (
           <button type="button" className="mini-btn" onClick={newChat}>
-            new
+            {t(lang, "chat.new")}
           </button>
         ) : null}
         <span className="chat-hint" style={{ marginTop: 0 }}>
-          {chatErr ??
-            (groups.length === 0
-              ? "loading…"
-              : sel === ""
-                ? (groups[0]?.error ?? "no usable model")
-                : "OpenAI-compatible · ⏎ send · ⇧⏎ newline")}
+          {chatHint}
         </span>
       </div>
       {showParams ? (
         <div className="popover">
           <div className="prow">
-            <span>temperature</span>
+            <span>{t(lang, "chat.temperature")}</span>
             <input
               className="pin"
               type="number"
               min="0"
               max="2"
               step="0.1"
-              placeholder="default"
+              placeholder={t(lang, "chat.placeholderDefault")}
               value={params.temperature ?? ""}
               onChange={(e) => setParams({ ...params, temperature: parseNum(e.target.value) })}
             />
           </div>
           <div className="prow">
-            <span>top_p</span>
+            <span>{t(lang, "chat.topP")}</span>
             <input
               className="pin"
               type="number"
               min="0"
               max="1"
               step="0.05"
-              placeholder="default"
+              placeholder={t(lang, "chat.placeholderDefault")}
               value={params.topP ?? ""}
               onChange={(e) => setParams({ ...params, topP: parseNum(e.target.value) })}
             />
           </div>
           <div className="prow">
-            <span>max tokens</span>
+            <span>{t(lang, "chat.maxTokens")}</span>
             <input
               className="pin"
               type="number"
               min="1"
               step="1"
-              placeholder="model default"
+              placeholder={t(lang, "chat.placeholderModelDefault")}
               value={params.maxTokens ?? ""}
               onChange={(e) => setParams({ ...params, maxTokens: parseNum(e.target.value) })}
             />
           </div>
           <div className="prow col">
-            <span>system prompt</span>
+            <span>{t(lang, "chat.systemPrompt")}</span>
             <textarea
               className="psys"
               rows={2}
-              placeholder="optional"
+              placeholder={t(lang, "chat.placeholderOptional")}
               value={params.system}
               onChange={(e) => setParams({ ...params, system: e.target.value })}
             />
           </div>
           {curThinking !== null ? (
             <div className="prow">
-              <span>thinking</span>
+              <span>{t(lang, "chat.thinking")}</span>
               <label className="chk">
                 <input
                   type="checkbox"
                   checked={params.thinkingOn}
                   onChange={(e) => setParams({ ...params, thinkingOn: e.target.checked })}
                 />
-                {params.thinkingOn ? "on" : "off"}
+                {params.thinkingOn ? t(lang, "chat.thinkingOn") : t(lang, "chat.thinkingOff")}
               </label>
             </div>
           ) : null}
           <div className="prow">
-            <span>footnote</span>
+            <span>{t(lang, "chat.footnote")}</span>
             <div className="checks">
               {(
                 [
-                  ["tokens", "tokens"],
-                  ["tps", "tok/s"],
-                  ["ttft", "TTFT"],
-                  ["reasoning", "reasoning"],
+                  ["tokens", "chat.footnoteTokens"],
+                  ["tps", "chat.footnoteTps"],
+                  ["ttft", "chat.footnoteTtft"],
+                  ["reasoning", "chat.footnoteReasoning"],
                 ] as const
-              ).map(([k, label]) => (
+              ).map(([k, labelKey]) => (
                 <label key={k} className="chk">
                   <input
                     type="checkbox"
                     checked={metrics[k]}
                     onChange={(e) => setMetrics({ ...metrics, [k]: e.target.checked })}
                   />
-                  {label}
+                  {t(lang, labelKey)}
                 </label>
               ))}
             </div>
           </div>
           <div className="prow">
             <button type="button" className="mini-btn" onClick={() => setParams(defaultParams())}>
-              reset params
+              {t(lang, "chat.resetParams")}
             </button>
           </div>
         </div>
       ) : null}
       <div className="chat-msgs" ref={scrollRef}>
-        {msgs.length === 0 ? (
-          <div className="empty">ask anything — chat is proxied to the selected provider</div>
-        ) : null}
+        {msgs.length === 0 ? <div className="empty">{t(lang, "chat.empty")}</div> : null}
         {msgs.map((m, i) => {
           const usageLine = m.usage !== undefined ? formatUsage(m.usage, metrics) : "";
           const showCopy = m.role === "assistant" && m.content !== "" && m.streaming !== true;
@@ -934,12 +1087,12 @@ function Chat() {
                   {usageLine !== "" ? <span>{usageLine}</span> : null}
                   {showCopy ? (
                     <button type="button" className="mini-btn" onClick={() => void copyMsg(m)}>
-                      {copiedId === m.id ? "copied" : "copy"}
+                      {copiedId === m.id ? t(lang, "chat.copied") : t(lang, "chat.copy")}
                     </button>
                   ) : null}
                   {showRegen ? (
                     <button type="button" className="mini-btn" onClick={() => void regenerate()}>
-                      regenerate
+                      {t(lang, "chat.regenerate")}
                     </button>
                   ) : null}
                 </div>
@@ -953,11 +1106,11 @@ function Chat() {
           <div className="thumbs pending">
             {pendingImages.map((p) => (
               <span key={p.id} className="thumb-wrap">
-                <img src={p.url} alt="pending attachment" className="thumb" />
+                <img src={p.url} alt={t(lang, "chat.pendingAttachment")} className="thumb" />
                 <button
                   type="button"
                   className="thumb-x"
-                  title="remove"
+                  title={t(lang, "chat.remove")}
                   onClick={() => setPendingImages((prev) => prev.filter((q) => q.id !== p.id))}
                 >
                   ×
@@ -970,7 +1123,7 @@ function Chat() {
         <button
           type="button"
           className="attach-btn"
-          title="attach image"
+          title={t(lang, "chat.attach")}
           onClick={() => fileInputRef.current?.click()}
         >
           +
@@ -989,7 +1142,9 @@ function Chat() {
         <textarea
           value={input}
           placeholder={
-            sel === "" ? "waiting for model list…" : `message ${splitSel(sel)?.model ?? ""}…`
+            sel === ""
+              ? t(lang, "chat.placeholderWaiting")
+              : t(lang, "chat.placeholderModel", { m: splitSel(sel)?.model ?? "" })
           }
           rows={2}
           onChange={(e) => setInput(e.target.value)}
@@ -1002,7 +1157,7 @@ function Chat() {
         />
         {busy ? (
           <button type="button" className="chat-btn stop" onClick={() => abortRef.current?.abort()}>
-            stop
+            {t(lang, "chat.stop")}
           </button>
         ) : (
           <button
@@ -1015,7 +1170,7 @@ function Chat() {
             }
             onClick={() => void send()}
           >
-            send
+            {t(lang, "chat.send")}
           </button>
         )}
       </div>
@@ -1024,6 +1179,7 @@ function Chat() {
 }
 
 function Spark({ a, b }: { a: (number | null)[]; b: (number | null)[] }) {
+  const { lang } = useUI();
   const pts = (arr: (number | null)[]): string => {
     const n = Math.max(2, arr.length);
     return arr
@@ -1039,20 +1195,20 @@ function Spark({ a, b }: { a: (number | null)[]; b: (number | null)[] }) {
   if (a.length < 2) return <div className="spark-empty" />;
   return (
     <svg className="spark" viewBox="0 0 100 40" preserveAspectRatio="none">
-      <title>GPU utilization and memory over time</title>
+      <title>{t(lang, "gpu.sparkTitle")}</title>
       <polyline
         points={pts(a)}
         fill="none"
-        stroke="#38bdf8"
         strokeWidth="1.5"
         vectorEffect="non-scaling-stroke"
+        style={{ stroke: "var(--spark-a)" }}
       />
       <polyline
         points={pts(b)}
         fill="none"
-        stroke="#a78bfa"
         strokeWidth="1.5"
         vectorEffect="non-scaling-stroke"
+        style={{ stroke: "var(--spark-b)" }}
       />
     </svg>
   );
@@ -1064,8 +1220,9 @@ interface GpuSeries {
 }
 
 function GpuCard({ gpu, hist }: { gpu: GpuState; hist: Record<number, GpuSeries> }) {
+  const { lang } = useUI();
   return (
-    <Card title={`gpu × ${gpu.gpus.length}`}>
+    <Card title={t(lang, "gpu.title", { count: gpu.gpus.length })}>
       {gpu.gpus.map((g) => {
         const memPct =
           g.memUsedMb !== null && g.memTotalMb !== null && g.memTotalMb > 0
@@ -1074,14 +1231,14 @@ function GpuCard({ gpu, hist }: { gpu: GpuState; hist: Record<number, GpuSeries>
         return (
           <div key={g.index} className="gpu-row">
             <Row
-              label={`GPU ${g.index}${g.name === "" ? "" : ` · ${g.name}`}`}
-              value={g.utilPct === null ? "—" : `${g.utilPct}% util`}
+              label={`${t(lang, "gpu.row", { index: g.index })}${g.name === "" ? "" : ` · ${g.name}`}`}
+              value={g.utilPct === null ? "—" : t(lang, "gpu.util", { pct: g.utilPct })}
             />
             <div className="bar">
               <div style={{ width: `${Math.min(100, g.utilPct ?? 0).toFixed(0)}%` }} />
             </div>
             <Row
-              label="memory"
+              label={t(lang, "gpu.memory")}
               value={
                 g.memUsedMb !== null && g.memTotalMb !== null
                   ? `${(g.memUsedMb / 1024).toFixed(1)} / ${(g.memTotalMb / 1024).toFixed(1)} GB`
@@ -1089,11 +1246,11 @@ function GpuCard({ gpu, hist }: { gpu: GpuState; hist: Record<number, GpuSeries>
               }
             />
             <Row
-              label="temp · power"
+              label={t(lang, "gpu.tempPower")}
               value={`${g.tempC === null ? "—" : `${g.tempC}°C`} · ${g.powerW === null ? "—" : `${g.powerW.toFixed(0)}W`}`}
             />
             <Spark a={hist[g.index]?.util ?? []} b={hist[g.index]?.mem ?? []} />
-            <div className="spark-cap">util · mem %</div>
+            <div className="spark-cap">{t(lang, "gpu.sparkCap")}</div>
           </div>
         );
       })}
@@ -1113,6 +1270,16 @@ function App() {
   const [err, setErr] = React.useState<string | null>(null);
   const [booted, setBooted] = React.useState(false);
   const [view, setView] = React.useState<"monitor" | "chat">("monitor");
+  const [theme, setTheme] = React.useState<Theme>((): Theme => readPrefs().theme);
+  const [lang, setLang] = React.useState<Lang>((): Lang => readPrefs().lang);
+
+  React.useEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+    document.documentElement.lang = lang;
+    savePrefs({ theme, lang });
+  }, [theme, lang]);
+
+  const ui = React.useMemo<UIState>(() => ({ theme, lang, setTheme, setLang }), [theme, lang]);
 
   React.useEffect(() => {
     fetch("/api/targets")
@@ -1126,7 +1293,7 @@ function App() {
         const first = d.targets[0];
         if (first !== undefined) setSel(first.id);
       })
-      .catch(() => setErr("cannot reach llm-cockpit API"))
+      .catch(() => setErr("api-down"))
       .finally(() => setBooted(true));
   }, []);
 
@@ -1171,7 +1338,7 @@ function App() {
         }
         setErr(null);
       } catch {
-        if (!stop) setErr("cannot reach llm-cockpit API");
+        if (!stop) setErr("api-down");
       }
     };
     void tick();
@@ -1183,53 +1350,79 @@ function App() {
   }, [sel]);
 
   const target = targets.find((t) => t.id === sel) ?? null;
-  const online = target !== null && target.status === "online";
+  const badgeCls =
+    target === null || target.status === "pending"
+      ? "pend"
+      : target.status === "online"
+        ? "ok"
+        : "off";
+  const badgeTxt =
+    target === null
+      ? t(lang, "target.none")
+      : target.status === "online"
+        ? t(lang, "target.online")
+        : target.status === "offline"
+          ? t(lang, "target.offline")
+          : t(lang, "target.pending");
 
-  const labels = history.map((s) => fmtTime(s.ts));
+  const labels = history.map((s) => fmtTime(s.ts, lang));
   const g = (pick: (s: ChartPoint) => number | null): (number | null)[] => history.map(pick);
   const hasValue = (pick: (s: ChartPoint) => number | null): boolean =>
     history.some((s) => pick(s) !== null);
   const hasAny = (pred: (s: ChartPoint) => boolean): boolean => history.some((s) => pred(s));
 
+  const c = CHART[theme];
   const requestSeries: Series[] = [
-    { name: "running", data: g((s) => s.requests.running), color: "#38bdf8" },
-    { name: "queued", data: g((s) => s.requests.queued), color: "#fbbf24" },
+    { name: t(lang, "requests.running"), data: g((s) => s.requests.running), color: c.blue },
+    { name: t(lang, "requests.queued"), data: g((s) => s.requests.queued), color: c.amber },
   ];
   if (hasValue((s) => s.requests.paused)) {
-    requestSeries.push({ name: "paused", data: g((s) => s.requests.paused), color: "#a78bfa" });
+    requestSeries.push({
+      name: t(lang, "requests.paused"),
+      data: g((s) => s.requests.paused),
+      color: c.violet,
+    });
   }
   if (hasValue((s) => s.requests.swapped)) {
-    requestSeries.push({ name: "swapped", data: g((s) => s.requests.swapped), color: "#f472b6" });
+    requestSeries.push({
+      name: t(lang, "requests.swapped"),
+      data: g((s) => s.requests.swapped),
+      color: c.pink,
+    });
   }
 
   const tpSeries: Series[] = [
-    { name: "generation tok/s", data: g((s) => s.throughput.generationTps), color: "#34d399" },
+    {
+      name: t(lang, "throughput.seriesGen"),
+      data: g((s) => s.throughput.generationTps),
+      color: c.green,
+    },
   ];
   if (hasValue((s) => s.throughput.prefillTps)) {
     tpSeries.push({
-      name: "prefill tok/s",
+      name: t(lang, "throughput.seriesPrefill"),
       data: g((s) => s.throughput.prefillTps),
-      color: "#fb923c",
+      color: c.orange,
     });
   }
   if (hasValue((s) => s.throughput.prefillEffectiveTps)) {
     tpSeries.push({
-      name: "prefill effective tok/s",
+      name: t(lang, "throughput.seriesPrefillEff"),
       data: g((s) => s.throughput.prefillEffectiveTps),
-      color: "#60a5fa",
+      color: c.blueLight,
     });
   }
 
   const kvSeries: Series[] = [
     {
-      name: "kv usage %",
+      name: t(lang, "kv.seriesUsage"),
       data: g((s) => (s.cache.kvUsagePct === null ? null : s.cache.kvUsagePct * 100)),
-      color: "#a78bfa",
+      color: c.violet,
     },
   ];
   if (hasAny((s) => s.cache.hostUsedTokens !== null && s.cache.hostTotalTokens !== null)) {
     kvSeries.push({
-      name: "host tier %",
+      name: t(lang, "kv.seriesHostTier"),
       data: g((s) =>
         s.cache.hostUsedTokens !== null &&
         s.cache.hostTotalTokens !== null &&
@@ -1237,15 +1430,27 @@ function App() {
           ? (s.cache.hostUsedTokens / s.cache.hostTotalTokens) * 100
           : null,
       ),
-      color: "#2dd4bf",
+      color: c.teal,
     });
   }
 
   const ttftSeries: Series[] = hasAny((s) => s.latency.ttft !== null)
     ? [
-        { name: "TTFT p50", data: g((s) => s.latency.ttft?.p50 ?? null), color: "#38bdf8" },
-        { name: "TTFT p90", data: g((s) => s.latency.ttft?.p90 ?? null), color: "#fbbf24" },
-        { name: "TTFT p99", data: g((s) => s.latency.ttft?.p99 ?? null), color: "#f87171" },
+        {
+          name: t(lang, "latency.ttftP50"),
+          data: g((s) => s.latency.ttft?.p50 ?? null),
+          color: c.blue,
+        },
+        {
+          name: t(lang, "latency.ttftP90"),
+          data: g((s) => s.latency.ttft?.p90 ?? null),
+          color: c.amber,
+        },
+        {
+          name: t(lang, "latency.ttftP99"),
+          data: g((s) => s.latency.ttft?.p99 ?? null),
+          color: c.red,
+        },
       ]
     : [];
 
@@ -1272,6 +1477,27 @@ function App() {
 
   if (booted && targets.length === 0) {
     return (
+      <UICtx.Provider value={ui}>
+        <div className="wrap">
+          <header className="hdr">
+            <div className="brand">
+              <span className="logo">◍</span>
+              <span className="wordmark">
+                LLM <em>Cockpit</em>
+              </span>
+            </div>
+            <div className="hdr-right">
+              <HeaderToggles />
+            </div>
+          </header>
+          <div className="banner">{t(lang, "banner.noTargets")}</div>
+        </div>
+      </UICtx.Provider>
+    );
+  }
+
+  return (
+    <UICtx.Provider value={ui}>
       <div className="wrap">
         <header className="hdr">
           <div className="brand">
@@ -1279,266 +1505,288 @@ function App() {
             <span className="wordmark">
               LLM <em>Cockpit</em>
             </span>
+            <nav className="nav">
+              <button
+                type="button"
+                className={view === "monitor" ? "on" : undefined}
+                onClick={() => setView("monitor")}
+              >
+                {t(lang, "nav.monitor")}
+              </button>
+              <button
+                type="button"
+                className={view === "chat" ? "on" : undefined}
+                onClick={() => setView("chat")}
+              >
+                {t(lang, "nav.chat")}
+              </button>
+            </nav>
+          </div>
+          <div className="hdr-right">
+            {targets.length > 1 ? (
+              <select className="sel" value={sel ?? ""} onChange={(e) => setSel(e.target.value)}>
+                {targets.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.id} · {t.url}
+                  </option>
+                ))}
+              </select>
+            ) : null}
+            <span className={`badge ${badgeCls}`}>{badgeTxt}</span>
+            {snap !== null ? (
+              <span className="meta">
+                {snap.engine.model ?? target?.model ?? "—"}
+                {snap.engine.version !== null ? ` · v${snap.engine.version}` : ""} ·{" "}
+                {snap.engine.adapter} · {snap.engine.rttMs}ms
+              </span>
+            ) : null}
+            <HeaderToggles />
           </div>
         </header>
-        <div className="banner">
-          no targets configured — add one to <code>cockpit.config.yaml</code>
-        </div>
-      </div>
-    );
-  }
 
-  return (
-    <div className="wrap">
-      <header className="hdr">
-        <div className="brand">
-          <span className="logo">◍</span>
-          <span className="wordmark">
-            LLM <em>Cockpit</em>
-          </span>
-          <nav className="nav">
-            <button
-              type="button"
-              className={view === "monitor" ? "on" : undefined}
-              onClick={() => setView("monitor")}
-            >
-              monitor
-            </button>
-            <button
-              type="button"
-              className={view === "chat" ? "on" : undefined}
-              onClick={() => setView("chat")}
-            >
-              chat
-            </button>
-          </nav>
-        </div>
-        <div className="hdr-right">
-          {targets.length > 1 ? (
-            <select className="sel" value={sel ?? ""} onChange={(e) => setSel(e.target.value)}>
-              {targets.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.id} · {t.url}
-                </option>
-              ))}
-            </select>
-          ) : null}
-          <span
-            className="badge"
-            style={{
-              background: online ? "rgba(52,211,153,.15)" : "rgba(248,113,113,.15)",
-              color: online ? "#34d399" : "#f87171",
-            }}
-          >
-            {target === null ? "no target" : target.status}
-          </span>
-          {snap !== null ? (
-            <span className="meta">
-              {snap.engine.model ?? target?.model ?? "—"}
-              {snap.engine.version !== null ? ` · v${snap.engine.version}` : ""} ·{" "}
-              {snap.engine.adapter} · {snap.engine.rttMs}ms
-            </span>
-          ) : null}
-        </div>
-      </header>
+        {err !== null ? (
+          <div className="banner">{err === "api-down" ? t(lang, "banner.apiDown") : err}</div>
+        ) : null}
+        {snap !== null && !snap.engine.healthy ? (
+          <div className="banner">{t(lang, "banner.engineDown")}</div>
+        ) : null}
 
-      {err !== null ? <div className="banner">{err}</div> : null}
-      {snap !== null && !snap.engine.healthy ? (
-        <div className="banner">
-          engine unreachable — is it running? if metrics are missing, start it with{" "}
-          <code>--enable-metrics</code>
-        </div>
-      ) : null}
-
-      <div className={`view${view === "monitor" ? "" : " hidden"}`}>
-        <>
-          <section className="grid4">
-            <Card title="requests">
-              <div className="stats">
-                <Stat label="running" value={fmtNum(snap?.requests.running ?? null, 0)} />
-                <Stat label="queued" value={fmtNum(snap?.requests.queued ?? null, 0)} />
-                {snap !== null && snap.requests.paused !== null ? (
-                  <Stat label="paused" value={fmtNum(snap.requests.paused, 0)} />
-                ) : null}
-                {snap !== null && snap.requests.swapped !== null ? (
-                  <Stat label="swapped" value={fmtNum(snap.requests.swapped, 0)} />
-                ) : null}
-              </div>
-              <LineChart series={requestSeries} labels={labels} />
-            </Card>
-
-            <Card title="throughput">
-              <div className="stats">
-                <Stat
-                  label="generation"
-                  value={fmtNum(snap?.throughput.generationTps ?? null)}
-                  sub="tok/s"
-                />
-                {snap !== null && snap.throughput.prefillTps !== null ? (
-                  <Stat label="prefill" value={fmtNum(snap.throughput.prefillTps)} sub="tok/s" />
-                ) : null}
-              </div>
-              {snap !== null && snap.throughput.requestsPerSec !== null ? (
-                <Row
-                  label="requests"
-                  value={`${snap.throughput.requestsPerSec.toFixed(2)} req/s`}
-                />
-              ) : null}
-              {snap !== null && (snap.extras["tflopsAllGpus"] ?? null) !== null ? (
-                <Row
-                  label="est. compute (all GPUs)"
-                  value={`${(snap.extras["tflopsAllGpus"] ?? 0).toFixed(1)} TFLOPS`}
-                />
-              ) : null}
-              {snap !== null && (snap.extras["memBandwidthGbsAllGpus"] ?? null) !== null ? (
-                <Row
-                  label="est. mem bandwidth"
-                  value={`${(snap.extras["memBandwidthGbsAllGpus"] ?? 0).toFixed(0)} GB/s`}
-                />
-              ) : null}
-              <LineChart series={tpSeries} labels={labels} />
-            </Card>
-
-            <Card title="kv cache">
-              {kvPct === null ? (
-                <div className="empty">no kv data</div>
-              ) : (
-                <>
-                  <div className="big">{(kvPct * 100).toFixed(1)}%</div>
-                  <div className="bar">
-                    <div style={{ width: `${Math.min(100, kvPct * 100).toFixed(1)}%` }} />
-                  </div>
-                  {kv !== null ? (
-                    <>
-                      <Row
-                        label="used / total"
-                        value={`${fmtTok(kv.kvUsedTokens)} / ${fmtTok(kv.kvTotalTokens)}`}
-                      />
-                      <Row label="cache hit rate" value={fmtPct(hitRate)} />
-                      {kv.kvAvailableTokens !== null ? (
-                        <Row label="KV available" value={fmtTok(kv.kvAvailableTokens)} />
-                      ) : null}
-                      {kv.deviceHitTps !== null ||
-                      kv.hostHitTps !== null ||
-                      kv.storageHitTps !== null ? (
-                        <Row
-                          label="hits dev/host/storage tok/s"
-                          value={`${fmtNum(kv.deviceHitTps)} / ${fmtNum(kv.hostHitTps)} / ${fmtNum(kv.storageHitTps)}`}
-                        />
-                      ) : null}
-                      {hostPct !== null ? (
-                        <Row label="host tier (L2)" value={fmtPct(hostPct)} />
-                      ) : null}
-                    </>
+        <div className={`view${view === "monitor" ? "" : " hidden"}`}>
+          <>
+            <section className="grid4">
+              <Card title={t(lang, "requests.title")}>
+                <div className="stats">
+                  <Stat
+                    label={t(lang, "requests.running")}
+                    value={fmtNum(snap?.requests.running ?? null, 0)}
+                  />
+                  <Stat
+                    label={t(lang, "requests.queued")}
+                    value={fmtNum(snap?.requests.queued ?? null, 0)}
+                  />
+                  {snap !== null && snap.requests.paused !== null ? (
+                    <Stat
+                      label={t(lang, "requests.paused")}
+                      value={fmtNum(snap.requests.paused, 0)}
+                    />
                   ) : null}
-                </>
-              )}
-              <LineChart series={kvSeries} labels={labels} />
-            </Card>
+                  {snap !== null && snap.requests.swapped !== null ? (
+                    <Stat
+                      label={t(lang, "requests.swapped")}
+                      value={fmtNum(snap.requests.swapped, 0)}
+                    />
+                  ) : null}
+                </div>
+                <LineChart series={requestSeries} labels={labels} />
+              </Card>
 
-            <Card title="latency (s)">
-              {lq !== null ? (
-                <>
-                  <div className="big">
-                    {lq.ttft.p50 === null ? "—" : `${lq.ttft.p50.toFixed(2)}s`}
-                  </div>
-                  <div className="stat-label">TTFT p50</div>
-                  <Row
-                    label="TTFT p90 / p99"
-                    value={`${lq.ttft.p90 === null ? "—" : lq.ttft.p90.toFixed(2)} / ${lq.ttft.p99 === null ? "—" : lq.ttft.p99.toFixed(2)}`}
+              <Card title={t(lang, "throughput.title")}>
+                <div className="stats">
+                  <Stat
+                    label={t(lang, "throughput.generation")}
+                    value={fmtNum(snap?.throughput.generationTps ?? null)}
+                    sub={t(lang, "throughput.tokPerSec")}
                   />
+                  {snap !== null && snap.throughput.prefillTps !== null ? (
+                    <Stat
+                      label={t(lang, "throughput.prefill")}
+                      value={fmtNum(snap.throughput.prefillTps)}
+                      sub={t(lang, "throughput.tokPerSec")}
+                    />
+                  ) : null}
+                </div>
+                {snap !== null && snap.throughput.requestsPerSec !== null ? (
                   <Row
-                    label="E2E p50 / p99"
-                    value={`${lq.e2e.p50 === null ? "—" : lq.e2e.p50.toFixed(2)} / ${lq.e2e.p99 === null ? "—" : lq.e2e.p99.toFixed(2)}`}
+                    label={t(lang, "throughput.rps")}
+                    value={`${snap.throughput.requestsPerSec.toFixed(2)} req/s`}
                   />
+                ) : null}
+                {snap !== null && (snap.extras["tflopsAllGpus"] ?? null) !== null ? (
                   <Row
-                    label="TPOT p50"
-                    value={lq.tpot.p50 === null ? "—" : lq.tpot.p50.toFixed(3)}
+                    label={t(lang, "throughput.estCompute")}
+                    value={`${(snap.extras["tflopsAllGpus"] ?? 0).toFixed(1)} TFLOPS`}
                   />
+                ) : null}
+                {snap !== null && (snap.extras["memBandwidthGbsAllGpus"] ?? null) !== null ? (
                   <Row
-                    label="queue wait p50"
-                    value={lq.queue.p50 === null ? "—" : lq.queue.p50.toFixed(3)}
+                    label={t(lang, "throughput.estMemBw")}
+                    value={`${(snap.extras["memBandwidthGbsAllGpus"] ?? 0).toFixed(0)} GB/s`}
                   />
-                </>
-              ) : (
-                <div className="empty">no latency data</div>
-              )}
-              <LineChart
-                series={
-                  ttftSeries.length > 0
-                    ? ttftSeries
-                    : [{ name: "TTFT p50", data: [], color: "#38bdf8" }]
-                }
-                labels={labels}
-              />
-            </Card>
-          </section>
+                ) : null}
+                <LineChart series={tpSeries} labels={labels} />
+              </Card>
 
-          <section className="grid5">
-            <Card title="tokens (cumulative)">
-              <Row label="prompt" value={fmtTok(snap?.tokens.promptTotal ?? null)} />
-              <Row label="generation" value={fmtTok(snap?.tokens.generationTotal ?? null)} />
-              <Row label="cached" value={fmtTok(snap?.tokens.cachedTotal ?? null)} />
-              <Row
-                label="requests completed"
-                value={fmtNum(snap?.counts.requestsCompletedTotal ?? null, 0)}
-              />
-            </Card>
+              <Card title={t(lang, "kv.title")}>
+                {kvPct === null ? (
+                  <div className="empty">{t(lang, "kv.empty")}</div>
+                ) : (
+                  <>
+                    <div className="big">{(kvPct * 100).toFixed(1)}%</div>
+                    <div className="bar">
+                      <div style={{ width: `${Math.min(100, kvPct * 100).toFixed(1)}%` }} />
+                    </div>
+                    {kv !== null ? (
+                      <>
+                        <Row
+                          label={t(lang, "kv.usedTotal")}
+                          value={`${fmtTok(kv.kvUsedTokens)} / ${fmtTok(kv.kvTotalTokens)}`}
+                        />
+                        <Row label={t(lang, "kv.hitRate")} value={fmtPct(hitRate)} />
+                        {kv.kvAvailableTokens !== null ? (
+                          <Row
+                            label={t(lang, "kv.available")}
+                            value={fmtTok(kv.kvAvailableTokens)}
+                          />
+                        ) : null}
+                        {kv.deviceHitTps !== null ||
+                        kv.hostHitTps !== null ||
+                        kv.storageHitTps !== null ? (
+                          <Row
+                            label={t(lang, "kv.hits")}
+                            value={`${fmtNum(kv.deviceHitTps)} / ${fmtNum(kv.hostHitTps)} / ${fmtNum(kv.storageHitTps)}`}
+                          />
+                        ) : null}
+                        {hostPct !== null ? (
+                          <Row label={t(lang, "kv.hostTier")} value={fmtPct(hostPct)} />
+                        ) : null}
+                      </>
+                    ) : null}
+                  </>
+                )}
+                <LineChart series={kvSeries} labels={labels} />
+              </Card>
 
-            <Card title="faults">
-              <div className="stats">
-                <Stat label="retracted" value={fmtNum(snap?.faults.retractedTotal ?? null, 0)} />
-                <Stat label="preempted" value={fmtNum(snap?.faults.preemptedTotal ?? null, 0)} />
-              </div>
-              <div className="caption">cumulative since engine start</div>
-            </Card>
+              <Card title={t(lang, "latency.title")}>
+                {lq !== null ? (
+                  <>
+                    <div className="big">
+                      {lq.ttft.p50 === null ? "—" : `${lq.ttft.p50.toFixed(2)}s`}
+                    </div>
+                    <div className="stat-label">{t(lang, "latency.ttftP50")}</div>
+                    <Row
+                      label={t(lang, "latency.ttftP9099")}
+                      value={`${lq.ttft.p90 === null ? "—" : lq.ttft.p90.toFixed(2)} / ${lq.ttft.p99 === null ? "—" : lq.ttft.p99.toFixed(2)}`}
+                    />
+                    <Row
+                      label={t(lang, "latency.e2eP5099")}
+                      value={`${lq.e2e.p50 === null ? "—" : lq.e2e.p50.toFixed(2)} / ${lq.e2e.p99 === null ? "—" : lq.e2e.p99.toFixed(2)}`}
+                    />
+                    <Row
+                      label={t(lang, "latency.tpotP50")}
+                      value={lq.tpot.p50 === null ? "—" : lq.tpot.p50.toFixed(3)}
+                    />
+                    <Row
+                      label={t(lang, "latency.queueP50")}
+                      value={lq.queue.p50 === null ? "—" : lq.queue.p50.toFixed(3)}
+                    />
+                  </>
+                ) : (
+                  <div className="empty">{t(lang, "latency.empty")}</div>
+                )}
+                <LineChart
+                  series={
+                    ttftSeries.length > 0
+                      ? ttftSeries
+                      : [{ name: t(lang, "latency.ttftP50"), data: [], color: c.blue }]
+                  }
+                  labels={labels}
+                />
+              </Card>
+            </section>
 
-            <Card title="extras">
-              {snap !== null && snap.capabilities["mamba"] ? (
-                <Row label="mamba occupancy" value={fmtPct(snap.extras["mambaUsage"] ?? null)} />
-              ) : null}
-              {snap !== null && snap.extras["loadBackTokensTotal"] !== null ? (
+            <section className="grid5">
+              <Card title={t(lang, "tokens.title")}>
                 <Row
-                  label="hicache load-back tokens"
-                  value={fmtTok(snap.extras["loadBackTokensTotal"] ?? null)}
+                  label={t(lang, "tokens.prompt")}
+                  value={fmtTok(snap?.tokens.promptTotal ?? null)}
                 />
-              ) : null}
-              {snap !== null && snap.extras["fwdOccupancy"] !== null ? (
                 <Row
-                  label="forward occupancy"
-                  value={fmtPct(snap.extras["fwdOccupancy"] ?? null)}
+                  label={t(lang, "tokens.generation")}
+                  value={fmtTok(snap?.tokens.generationTotal ?? null)}
                 />
-              ) : null}
-              {snap !== null && (snap.extras["mambaAvailableTokens"] ?? null) !== null ? (
                 <Row
-                  label="mamba slots available"
-                  value={fmtNum(snap.extras["mambaAvailableTokens"] ?? null, 0)}
+                  label={t(lang, "tokens.cached")}
+                  value={fmtTok(snap?.tokens.cachedTotal ?? null)}
                 />
-              ) : null}
-              {snap !== null && (snap.extras["specAcceptRate"] ?? null) !== null ? (
                 <Row
-                  label="spec accept rate / len"
-                  value={`${((snap.extras["specAcceptRate"] ?? 0) * 100).toFixed(1)}% / ${fmtNum(snap.extras["specAcceptLength"] ?? null)}`}
+                  label={t(lang, "tokens.completed")}
+                  value={fmtNum(snap?.counts.requestsCompletedTotal ?? null, 0)}
                 />
-              ) : null}
-              {snap === null ? <div className="empty">no data</div> : null}
-            </Card>
+              </Card>
 
-            <Card title="engine">
-              <Row label="adapter" value={snap?.engine.adapter ?? target?.adapter ?? "—"} />
-              <Row label="model" value={snap?.engine.model ?? target?.model ?? "—"} />
-              <Row label="version" value={snap?.engine.version ?? target?.version ?? "—"} />
-              <Row label="probe rtt" value={`${snap?.engine.rttMs ?? 0}ms`} />
-              <Row label="url" value={target?.url ?? "—"} />
-            </Card>
-            {gpu !== null && gpu.available ? <GpuCard gpu={gpu} hist={gpuHist} /> : null}
-          </section>
-        </>
+              <Card title={t(lang, "faults.title")}>
+                <div className="stats">
+                  <Stat
+                    label={t(lang, "faults.retracted")}
+                    value={fmtNum(snap?.faults.retractedTotal ?? null, 0)}
+                  />
+                  <Stat
+                    label={t(lang, "faults.preempted")}
+                    value={fmtNum(snap?.faults.preemptedTotal ?? null, 0)}
+                  />
+                </div>
+                <div className="caption">{t(lang, "faults.caption")}</div>
+              </Card>
+
+              <Card title={t(lang, "extras.title")}>
+                {snap !== null && snap.capabilities["mamba"] ? (
+                  <Row
+                    label={t(lang, "extras.mambaOccupancy")}
+                    value={fmtPct(snap.extras["mambaUsage"] ?? null)}
+                  />
+                ) : null}
+                {snap !== null && snap.extras["loadBackTokensTotal"] !== null ? (
+                  <Row
+                    label={t(lang, "extras.hicacheLoadBack")}
+                    value={fmtTok(snap.extras["loadBackTokensTotal"] ?? null)}
+                  />
+                ) : null}
+                {snap !== null && snap.extras["fwdOccupancy"] !== null ? (
+                  <Row
+                    label={t(lang, "extras.fwdOccupancy")}
+                    value={fmtPct(snap.extras["fwdOccupancy"] ?? null)}
+                  />
+                ) : null}
+                {snap !== null && (snap.extras["mambaAvailableTokens"] ?? null) !== null ? (
+                  <Row
+                    label={t(lang, "extras.mambaSlots")}
+                    value={fmtNum(snap.extras["mambaAvailableTokens"] ?? null, 0)}
+                  />
+                ) : null}
+                {snap !== null && (snap.extras["specAcceptRate"] ?? null) !== null ? (
+                  <Row
+                    label={t(lang, "extras.specAccept")}
+                    value={`${((snap.extras["specAcceptRate"] ?? 0) * 100).toFixed(1)}% / ${fmtNum(snap.extras["specAcceptLength"] ?? null)}`}
+                  />
+                ) : null}
+                {snap === null ? <div className="empty">{t(lang, "extras.empty")}</div> : null}
+              </Card>
+
+              <Card title={t(lang, "engine.title")}>
+                <Row
+                  label={t(lang, "engine.adapter")}
+                  value={snap?.engine.adapter ?? target?.adapter ?? "—"}
+                />
+                <Row
+                  label={t(lang, "engine.model")}
+                  value={snap?.engine.model ?? target?.model ?? "—"}
+                />
+                <Row
+                  label={t(lang, "engine.version")}
+                  value={snap?.engine.version ?? target?.version ?? "—"}
+                />
+                <Row label={t(lang, "engine.rtt")} value={`${snap?.engine.rttMs ?? 0}ms`} />
+                <Row label={t(lang, "engine.url")} value={target?.url ?? "—"} />
+              </Card>
+              {gpu !== null && gpu.available ? <GpuCard gpu={gpu} hist={gpuHist} /> : null}
+            </section>
+          </>
+        </div>
+        <div className={`view${view === "chat" ? "" : " hidden"}`}>
+          <Chat />
+        </div>
       </div>
-      <div className={`view${view === "chat" ? "" : " hidden"}`}>
-        <Chat />
-      </div>
-    </div>
+    </UICtx.Provider>
   );
 }
 

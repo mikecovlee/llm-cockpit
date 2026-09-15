@@ -11,9 +11,13 @@ chat window, in one process.
 (Prometheus metric names or JSON paths). The UI renders a canonical, engine-agnostic
 model — adding a new engine means one small adapter file, not a UI rewrite.
 
-| monitor | chat |
-|---|---|
-| ![monitor](screenshots/m3-monitor.png) | ![chat](screenshots/m3-chat-reply.png) |
+**Bilingual & themable**: the UI auto-detects your browser language (English/中文)
+and system color scheme (light/dark); one tap in the header switches either,
+and the choice persists across visits.
+
+| monitor | chat | light + 中文 |
+|---|---|---|
+| ![monitor](screenshots/m3-monitor.png) | ![chat](screenshots/m3-chat-reply.png) | ![light zh](screenshots/m7-light-zh.png) |
 
 ## Install
 
@@ -228,6 +232,9 @@ llm-cockpit 是一个多引擎推理控制台:一个进程里同时提供**实�
 - **GPU 面板**(自动探测):利用率、显存、温度、功耗 + 页面存续期迷你曲线;
   docker 部署时 `--gpus all` 即可(`make` 目标在宿主机具备 NVIDIA 容器运行时
   时自动附加),无 nvidia-smi 时整卡隐藏。
+- **界面双语与主题**:自动跟随浏览器语言(English/中文)与系统主题(亮/暗),
+  右上角 `中/EN` 与日/月按钮一键切换且持久化;技术术语(TTFT、tok/s、KV)
+  两种语言下均保留英文。
 - **对话窗口**:可配置**多个 provider**(`chat.providers`,如下拉中的
   "DeepSeek · deepseek-flash";监控后端天然是默认 provider,api_key 只留在
   服务端),代理到任意 OpenAI-compatible API,支持 SSE 流式、reasoning

@@ -5,6 +5,25 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); thi
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-09-15
+
+### Added
+- Bilingual UI (English/中文): browser-language auto-detect, one-tap header
+  toggle, persisted preference. Technical terms (TTFT, tok/s, KV) stay English
+  in both languages.
+- Light & dark themes: follow system `prefers-color-scheme` on first visit,
+  one-tap header toggle, persisted. Charts, vendored code-highlighting
+  (github-dark/github-light), GPU sparklines and every surface are theme-aware;
+  applied pre-paint by an inline script (no flash of the wrong theme).
+- `scripts/qa-theme.mjs`: 8-combination matrix (theme × language × width)
+  asserting localized labels, WCAG contrast ≥ 4.5, sticky-header spacing and
+  toggle persistence.
+
+### Fixed
+- Sticky header had zero bottom margin and an over-transparent background, so
+  page content visibly touched and bled through its edge — now 12px spacing,
+  0.94-alpha backdrop and a subtle shadow.
+
 ## [0.1.2] - 2026-09-15
 
 First release with downloadable artifacts + container image.
