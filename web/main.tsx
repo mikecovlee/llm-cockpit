@@ -161,7 +161,7 @@ function LineChart({ series, labels }: { series: Series[]; labels: string[] }) {
     if (chart === null) return;
     chart.setOption({
       backgroundColor: "transparent",
-      grid: { left: 46, right: 14, top: series.length > 1 ? 30 : 18, bottom: 22 },
+      grid: { left: 46, right: 26, top: series.length > 1 ? 30 : 18, bottom: 22 },
       tooltip: { trigger: "axis" },
       legend:
         series.length > 1
@@ -191,7 +191,7 @@ function LineChart({ series, labels }: { series: Series[]; labels: string[] }) {
     });
   }, [series, labels]);
 
-  return <div ref={ref} style={{ width: "100%", height: 190 }} />;
+  return <div ref={ref} className="chart" />;
 }
 
 /* ---------- layout primitives ---------- */
@@ -713,7 +713,10 @@ function App() {
       <div className="wrap">
         <header className="hdr">
           <div className="brand">
-            <span className="logo">◍</span> llm-cockpit
+            <span className="logo">◍</span>
+            <span className="wordmark">
+              LLM <em>Cockpit</em>
+            </span>
           </div>
         </header>
         <div className="banner">
@@ -727,7 +730,10 @@ function App() {
     <div className="wrap">
       <header className="hdr">
         <div className="brand">
-          <span className="logo">◍</span> llm-cockpit
+          <span className="logo">◍</span>
+          <span className="wordmark">
+            LLM <em>Cockpit</em>
+          </span>
           <nav className="nav">
             <button
               type="button"
@@ -842,11 +848,13 @@ function App() {
             <Card title="latency (s)">
               {lq !== null ? (
                 <>
+                  <div className="big">
+                    {lq.ttft.p50 === null ? "—" : `${lq.ttft.p50.toFixed(2)}s`}
+                  </div>
+                  <div className="stat-label">TTFT p50</div>
                   <Row
-                    label="TTFT p50 / p90 / p99"
-                    value={[lq.ttft.p50, lq.ttft.p90, lq.ttft.p99]
-                      .map((v) => (v === null ? "—" : v.toFixed(2)))
-                      .join(" / ")}
+                    label="TTFT p90 / p99"
+                    value={`${lq.ttft.p90 === null ? "—" : lq.ttft.p90.toFixed(2)} / ${lq.ttft.p99 === null ? "—" : lq.ttft.p99.toFixed(2)}`}
                   />
                   <Row
                     label="E2E p50 / p99"
