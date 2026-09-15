@@ -38,6 +38,18 @@ docker run --rm --network host \
 (fixture: `screenshots/m2-monitor.png`). Update `screenshots/` in the same PR
 when UI visuals change.
 
+## Layout stability
+
+`scripts/qa-stability.mjs` soaks the monitor for ~100 s (tab toggles, resizes,
+DPR 1.5) and fails on any height/node drift — run it after CSS/chart
+layout changes:
+
+```bash
+docker run --rm --network host \
+  -e NODE_PATH=/root/.bun/install/global/node_modules \
+  -v $PWD:/work cockpit-qa:local bun run /work/scripts/qa-stability.mjs
+```
+
 ## Submitting
 
 One commit per milestone or fix; `make test typecheck lint` must be green and
