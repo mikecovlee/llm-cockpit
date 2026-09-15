@@ -10,6 +10,7 @@ import {
   unlinkSync,
   writeFileSync,
 } from "node:fs";
+import { brotliCompressSync, gzipSync } from "node:zlib";
 import { build } from "bun";
 
 mkdirSync("dist", { recursive: true });
@@ -36,13 +37,19 @@ if (existsSync("web/main.tsx")) {
   const hash = createHash("sha256").update(js).digest("hex").slice(0, 10);
   const asset = `main-${hash}.js`;
   writeFileSync(`dist/web/${asset}`, js);
+  writeFileSync(`dist/web/${asset}.br`, brotliCompressSync(js));
+  writeFileSync(`dist/web/${asset}.gz`, gzipSync(js, { level: 9 }));
+  const keep = new Set(["index.html", asset, `${asset}.br`, `${asset}.gz`]);
   for (const f of readdirSync("dist/web")) {
-    if (/^(main\.js|main-[0-9a-f]+\.js)$/.test(f) && f !== asset) {
+    if (keep.has(f)) continue;
+    if (/^(main\.js|main-[0-9a-f]+\.js(\.br|\.gz)?)$/.test(f)) {
       unlinkSync(`dist/web/${f}`);
     }
   }
   const html = readFileSync("web/index.html", "utf8").replace("/web/main.js", `/web/${asset}`);
   writeFileSync("dist/web/index.html", html);
+  writeFileSync("dist/web/index.html.br", brotliCompressSync(Buffer.from(html)));
+  writeFileSync("dist/web/index.html.gz", gzipSync(Buffer.from(html), { level: 9 }));
 }
 
 if (!server.success) {

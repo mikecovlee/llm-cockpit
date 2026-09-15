@@ -99,7 +99,7 @@ metrics are missing): `POST /api/validate-mapping`.
 | `GET /api/health` | liveness + target count |
 | `GET /api/targets` | targets with adapter, status, model, version |
 | `GET /api/snapshot?target=id` | latest normalized snapshot |
-| `GET /api/history?target=id&sec=600` | rolling ring (≤ 15 min @ 2 s) |
+| `GET /api/history?target=id&sec=600` | rolling ring (≤ 15 min @ 2 s); `&compact=1` → chart scalars only |
 | `POST /api/validate-mapping` | validate a custom adapter + live probe |
 | `GET /api/chat/models` | model list from the configured chat endpoint |
 | `POST /api/chat/stream` | SSE proxy → OpenAI `chat/completions` (stream, ≤12 MB body) |
@@ -129,6 +129,12 @@ bun, zero runtime deps) and the web app (browser, content-hashed asset name).
 executable **plus its sibling `web/` asset folder** — run it from that directory
 (the UI needs those assets at runtime; the API works without them).
 Browser QA harness and conventions: see [CONTRIBUTING.md](CONTRIBUTING.md).
+
+Remote/high-latency access (e.g. an SSH tunnel): every response is
+brotli/gzip-negotiated (static assets pre-compressed at build time, API
+payloads at serve time), the UI bundle carries a content hash in its filename
+and is cached `immutable` — first load ~0.6 MB, reloads fetch only the 12 KB
+page and the compact chart deltas (~20 KB brotli per 2 s poll).
 
 ## Security
 

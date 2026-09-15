@@ -120,6 +120,25 @@ const fmtTok = (v: number | null): string => {
   return String(Math.round(v));
 };
 
+/** Wire shape of /api/history?compact=1 — chart scalars only (public API
+ * contract mirrored by toChartPoint in src/server.ts). */
+interface ChartPoint {
+  ts: number;
+  requests: {
+    running: number | null;
+    queued: number | null;
+    paused: number | null;
+    swapped: number | null;
+  };
+  throughput: { generationTps: number | null; prefillTps: number | null };
+  cache: {
+    kvUsagePct: number | null;
+    hostUsedTokens: number | null;
+    hostTotalTokens: number | null;
+  };
+  latency: { ttft: { p50: number | null; p90: number | null; p99: number | null } | null };
+}
+
 const fmtTime = (ts: number): string => new Date(ts).toLocaleTimeString("en-GB", { hour12: false });
 
 const uid = (): string =>
@@ -582,7 +601,7 @@ function App() {
   const [targets, setTargets] = React.useState<Target[]>([]);
   const [sel, setSel] = React.useState<string | null>(null);
   const [snap, setSnap] = React.useState<Snapshot | null>(null);
-  const [history, setHistory] = React.useState<Snapshot[]>([]);
+  const [history, setHistory] = React.useState<ChartPoint[]>([]);
   const [err, setErr] = React.useState<string | null>(null);
   const [booted, setBooted] = React.useState(false);
   const [view, setView] = React.useState<"monitor" | "chat">("monitor");
@@ -612,8 +631,8 @@ function App() {
           fetch(`/api/snapshot?target=${encodeURIComponent(sel)}`).then(
             (r) => r.json() as Promise<{ snapshot: Snapshot | null }>,
           ),
-          fetch(`/api/history?target=${encodeURIComponent(sel)}&sec=900`).then(
-            (r) => r.json() as Promise<{ points: Snapshot[] }>,
+          fetch(`/api/history?target=${encodeURIComponent(sel)}&sec=900&compact=1`).then(
+            (r) => r.json() as Promise<{ points: ChartPoint[] }>,
           ),
         ]);
         if (stop) return;
@@ -636,10 +655,10 @@ function App() {
   const online = target !== null && target.status === "online";
 
   const labels = history.map((s) => fmtTime(s.ts));
-  const g = (pick: (s: Snapshot) => number | null): (number | null)[] => history.map(pick);
-  const hasValue = (pick: (s: Snapshot) => number | null): boolean =>
+  const g = (pick: (s: ChartPoint) => number | null): (number | null)[] => history.map(pick);
+  const hasValue = (pick: (s: ChartPoint) => number | null): boolean =>
     history.some((s) => pick(s) !== null);
-  const hasAny = (pred: (s: Snapshot) => boolean): boolean => history.some((s) => pred(s));
+  const hasAny = (pred: (s: ChartPoint) => boolean): boolean => history.some((s) => pred(s));
 
   const requestSeries: Series[] = [
     { name: "running", data: g((s) => s.requests.running), color: "#38bdf8" },
@@ -686,9 +705,9 @@ function App() {
 
   const ttftSeries: Series[] = hasAny((s) => s.latency.ttft !== null)
     ? [
-        { name: "TTFT p50", data: g((s) => hq(s.latency.ttft).p50), color: "#38bdf8" },
-        { name: "TTFT p90", data: g((s) => hq(s.latency.ttft).p90), color: "#fbbf24" },
-        { name: "TTFT p99", data: g((s) => hq(s.latency.ttft).p99), color: "#f87171" },
+        { name: "TTFT p50", data: g((s) => s.latency.ttft?.p50 ?? null), color: "#38bdf8" },
+        { name: "TTFT p90", data: g((s) => s.latency.ttft?.p90 ?? null), color: "#fbbf24" },
+        { name: "TTFT p99", data: g((s) => s.latency.ttft?.p99 ?? null), color: "#f87171" },
       ]
     : [];
 

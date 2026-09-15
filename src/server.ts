@@ -5,6 +5,7 @@
 
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { brotliCompressSync, gzipSync } from "node:zlib";
 import { serve } from "bun";
 import { parse as parseYaml } from "yaml";
 import {
@@ -18,7 +19,9 @@ import { fetchText } from "./adapters/http.ts";
 import { autoDetect, builtins } from "./adapters/index.ts";
 import type { EngineAdapter } from "./adapters/types.ts";
 import { type ChatConfig, chatStream, listModels } from "./chat/openai.ts";
+import { histogramToQuantiles } from "./core/derive.ts";
 import { withSseKeepalive } from "./core/keepalive.ts";
+import type { HistogramBuckets, Snapshot } from "./core/model.ts";
 import { findHistogram, findSeries, parsePrometheus } from "./core/prom.ts";
 import { Ring, ringCapacity, type Target } from "./core/registry.ts";
 
@@ -180,6 +183,54 @@ function jsonResponse(data: unknown, status = 200): Response {
   });
 }
 
+/** JSON/HTML response with brotli/gzip negotiation (API payloads; static files
+ * are pre-compressed at build time instead). */
+function encodedResponse(req: Request, body: string, type: string): Response {
+  const ae = req.headers.get("accept-encoding") ?? "";
+  const headers: Record<string, string> = {
+    "content-type": type,
+    "cache-control": "no-store",
+    vary: "Accept-Encoding",
+  };
+  if (ae.includes("br")) {
+    headers["content-encoding"] = "br";
+    return new Response(brotliCompressSync(Buffer.from(body)), { headers });
+  }
+  if (ae.includes("gzip")) {
+    headers["content-encoding"] = "gzip";
+    return new Response(gzipSync(Buffer.from(body), { level: 6 }), { headers });
+  }
+  return new Response(body, { headers });
+}
+
+function tripleOf(h: HistogramBuckets | null) {
+  return h === null ? null : histogramToQuantiles(h);
+}
+
+/** Chart-relevant scalars only — strips histogram buckets and unused groups
+ * (≈4× smaller before compression; 30×+ after). */
+function toChartPoint(s: Snapshot) {
+  return {
+    ts: s.ts,
+    requests: {
+      running: s.requests.running,
+      queued: s.requests.queued,
+      paused: s.requests.paused,
+      swapped: s.requests.swapped,
+    },
+    throughput: {
+      generationTps: s.throughput.generationTps,
+      prefillTps: s.throughput.prefillTps,
+    },
+    cache: {
+      kvUsagePct: s.cache.kvUsagePct,
+      hostUsedTokens: s.cache.hostUsedTokens,
+      hostTotalTokens: s.cache.hostTotalTokens,
+    },
+    latency: { ttft: tripleOf(s.latency.ttft) },
+  };
+}
+
 /** Read a request body enforcing a hard byte cap regardless of encoding or
  * absent content-length headers (chunked bodies included). */
 async function readCappedText(req: Request, maxBytes: number): Promise<string | null> {
@@ -292,6 +343,8 @@ const indexHtml =
     : existsSync("web/index.html")
       ? readFileSync("web/index.html", "utf8")
       : "<h1>llm-cockpit</h1>";
+const indexBr = brotliCompressSync(Buffer.from(indexHtml));
+const indexGz = gzipSync(Buffer.from(indexHtml), { level: 9 });
 
 const MIME: Record<string, string> = {
   js: "text/javascript; charset=utf-8",
@@ -328,7 +381,11 @@ const server = serve({
         return jsonResponse({ error: `unknown target '${u.searchParams.get("target")}'` }, 404);
       const snap = rings[i]!.latest();
       if (snap === null) return jsonResponse({ error: "no data collected yet" }, 503);
-      return jsonResponse({ target: targets[i]!.id, snapshot: snap });
+      return encodedResponse(
+        req,
+        JSON.stringify({ target: targets[i]!.id, snapshot: snap }),
+        "application/json; charset=utf-8",
+      );
     }
 
     if (u.pathname === "/api/history") {
@@ -336,11 +393,17 @@ const server = serve({
       if (i < 0) return jsonResponse({ error: "unknown target" }, 404);
       const secRaw = Number(u.searchParams.get("sec") ?? "600");
       const sec = Number.isFinite(secRaw) ? Math.min(1800, Math.max(5, secRaw)) : 600;
-      return jsonResponse({
-        target: targets[i]!.id,
-        interval_s: serverCfg.pollIntervalS,
-        points: rings[i]!.within(sec),
-      });
+      const points = rings[i]!.within(sec);
+      const compact = u.searchParams.get("compact") === "1";
+      return encodedResponse(
+        req,
+        JSON.stringify({
+          target: targets[i]!.id,
+          interval_s: serverCfg.pollIntervalS,
+          points: compact ? points.map(toChartPoint) : points,
+        }),
+        "application/json; charset=utf-8",
+      );
     }
 
     if (u.pathname === "/api/validate-mapping") {
@@ -411,9 +474,17 @@ const server = serve({
     }
 
     if (u.pathname === "/" || u.pathname === "/index.html") {
-      return new Response(indexHtml, {
-        headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" },
-      });
+      const ae = req.headers.get("accept-encoding") ?? "";
+      const h: Record<string, string> = {
+        "content-type": "text/html; charset=utf-8",
+        "cache-control": "no-store",
+        vary: "Accept-Encoding",
+      };
+      if (ae.includes("br"))
+        return new Response(indexBr, { headers: { ...h, "content-encoding": "br" } });
+      if (ae.includes("gzip"))
+        return new Response(indexGz, { headers: { ...h, "content-encoding": "gzip" } });
+      return new Response(indexHtml, { headers: h });
     }
 
     if (u.pathname.startsWith("/web/")) {
@@ -424,12 +495,27 @@ const server = serve({
       const file = join(webRootDir, rel);
       if (existsSync(file)) {
         const ext = rel.slice(rel.lastIndexOf(".") + 1);
-        return new Response(Bun.file(file), {
-          headers: {
-            "content-type": MIME[ext] ?? "application/octet-stream",
-            "cache-control": "no-store",
-          },
-        });
+        const type = MIME[ext] ?? "application/octet-stream";
+        const cached = /^main-[0-9a-f]+\.js$/.test(rel)
+          ? "public, max-age=31536000, immutable"
+          : "no-store";
+        const ae = req.headers.get("accept-encoding") ?? "";
+        const headers: Record<string, string> = {
+          "content-type": type,
+          "cache-control": cached,
+          vary: "Accept-Encoding",
+        };
+        if (ae.includes("br") && existsSync(`${file}.br`)) {
+          return new Response(Bun.file(`${file}.br`), {
+            headers: { ...headers, "content-encoding": "br" },
+          });
+        }
+        if (ae.includes("gzip") && existsSync(`${file}.gz`)) {
+          return new Response(Bun.file(`${file}.gz`), {
+            headers: { ...headers, "content-encoding": "gzip" },
+          });
+        }
+        return new Response(Bun.file(file), { headers });
       }
       return new Response("not found", { status: 404 });
     }
