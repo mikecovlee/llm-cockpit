@@ -5,6 +5,9 @@
   "license": "Apache-2.0",
   "keywords": ["llm", "inference", "monitoring", "observability", "sglang", "vllm", "openai"],
   "engines": { "bun": ">=1.2.0" },
+  "repository": { "type": "git", "url": "git+https://github.com/mikecovlee/llm-cockpit.git" },
+  "homepage": "https://github.com/mikecovlee/llm-cockpit#readme",
+  "bugs": { "url": "https://github.com/mikecovlee/llm-cockpit/issues" },
   "type": "module",
   "private": true,
   "scripts": {
