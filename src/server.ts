@@ -158,8 +158,9 @@ for (let i = 0; i < targetConfigs.length; i++) {
 }
 
 if (targets.length === 0) {
-  console.error("[config] no usable targets — nothing to monitor");
-  process.exit(1);
+  console.warn(
+    "[config] no usable targets — serving empty dashboard + chat only (add targets to cockpit.config.yaml)",
+  );
 }
 
 const startedAt = Date.now();

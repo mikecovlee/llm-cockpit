@@ -5,6 +5,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); thi
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-09-15
+
+The v0.1.0 tag produced no artifacts (two release-pipeline bugs found by the
+pipeline itself); it was rolled into this one.
+
+### Fixed
+- Server no longer exits when every configured target is unreachable — the
+  cockpit boots with an empty dashboard and the chat keeps working (Docker
+  deployments on bridge networks hit this with the zero-config default target)
+- release-notes extraction treated the version bracket as a regex class
+
 ## [0.1.0] - 2026-09-15
 
 First public release.

@@ -34,7 +34,7 @@ jobs:
       - name: extract release notes
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
-          awk -v want="[$VERSION]" '$0 ~ "^## "want" -" {found=1; next} found && /^## \[/ {exit} found {print}' CHANGELOG.md > release-notes.md
+          awk -v ver="$VERSION" 'index($0, "## ["ver"] -") == 1 {found=1; next} found && /^## \[/ {exit} found {print}' CHANGELOG.md > release-notes.md
           test -s release-notes.md
       - name: create release + upload assets
         env:
