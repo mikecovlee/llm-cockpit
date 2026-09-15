@@ -156,7 +156,7 @@
         margin-top: 8px;
       }
       .spark-cap {
-        color: #6e7681;
+        color: #8b949e;
         font-size: 10px;
         margin-top: 2px;
       }
@@ -209,7 +209,7 @@
       }
       .stat-label {
         font-size: 11px;
-        color: #6e7681;
+        color: #8b949e;
         margin-top: 2px;
       }
       .big {
@@ -295,7 +295,7 @@
         display: flex;
         flex-direction: column;
         gap: 12px;
-        padding: 8px 2px 14px;
+        padding: 8px 12px 14px;
       }
       .bubble {
         max-width: 85%;
@@ -345,6 +345,64 @@
         overflow-x: auto;
         font-size: 12.5px;
         line-height: 1.55;
+      }
+      .bubble table {
+        border-collapse: collapse;
+        margin: 8px 0;
+        font-variant-numeric: tabular-nums;
+        font-size: 13px;
+      }
+      .bubble th,
+      .bubble td {
+        border: 1px solid #21262d;
+        padding: 6px 10px;
+        text-align: left;
+      }
+      .bubble th {
+        background: #161b22;
+        color: #c9d1d9;
+      }
+      .codectl {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 14px;
+        margin: -12px -12px 10px;
+        padding: 5px 12px;
+        background: #161b22;
+        border-bottom: 1px solid #21262d;
+        font-size: 11px;
+        color: #8b949e;
+      }
+      .codectl button {
+        background: none;
+        border: none;
+        color: #8b949e;
+        font-size: 11px;
+        cursor: pointer;
+        padding: 0;
+      }
+      .codectl button:hover {
+        color: #e6edf3;
+      }
+      .cursor {
+        color: #38bdf8;
+        animation: blink 1s step-end infinite;
+      }
+      @keyframes blink {
+        50% {
+          opacity: 0;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .cursor {
+          animation: none;
+        }
+      }
+      .caption {
+        font-size: 11px;
+        color: #8b949e;
+        margin-top: 8px;
       }
       .bubble code {
         font-family: ui-monospace, "SF Mono", Menlo, monospace;
@@ -566,9 +624,9 @@
         display: flex;
         gap: 10px;
         align-items: center;
-        color: #6e7681;
+        color: #8b949e;
         font-size: 11px;
-        margin: 4px 2px 0;
+        margin: 4px 2px 0 16px;
       }
       .msg-wrap {
         display: contents;
@@ -592,10 +650,15 @@
         cursor: not-allowed;
       }
       .chat-hint {
-        color: #6e7681;
+        color: #8b949e;
         font-size: 12px;
         margin-top: 8px;
         text-align: center;
+      }
+      .pin:focus,
+      .psys:focus {
+        outline: none;
+        border-color: rgba(56, 189, 248, 0.5);
       }
     </style>
   </head>

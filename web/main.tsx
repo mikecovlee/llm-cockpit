@@ -323,6 +323,28 @@ function Bubble({ msg }: { msg: ChatMsg }) {
     for (const c of Array.from(el.querySelectorAll<HTMLElement>("pre code"))) {
       hljs.highlightElement(c);
     }
+    for (const pre of Array.from(el.querySelectorAll<HTMLElement>("pre"))) {
+      const code = pre.querySelector("code");
+      const ctl = document.createElement("div");
+      ctl.className = "codectl";
+      const lang = document.createElement("span");
+      lang.textContent = code?.className.match(/language-([\w-]+)/)?.[1] ?? "code";
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.textContent = "copy";
+      btn.addEventListener("click", () => {
+        void copyText(code?.textContent ?? "").then((ok): void => {
+          if (ok) {
+            btn.textContent = "copied";
+            setTimeout(() => {
+              btn.textContent = "copy";
+            }, 1500);
+          }
+        });
+      });
+      ctl.append(lang, btn);
+      pre.insertBefore(ctl, pre.firstChild);
+    }
   }, [msg.content]);
   return (
     <div className={`bubble ${msg.role}`}>
@@ -340,7 +362,7 @@ function Bubble({ msg }: { msg: ChatMsg }) {
         </details>
       ) : null}
       <div ref={ref} />
-      {msg.streaming ? <span style={{ color: "#38bdf8", animation: "none" }}>▍</span> : null}
+      {msg.streaming ? <span className="cursor">▍</span> : null}
     </div>
   );
 }
@@ -508,9 +530,20 @@ function Chat() {
     };
   }, []);
 
+  const stickRef = React.useRef(true);
   React.useEffect(() => {
     const el = scrollRef.current;
-    if (el !== null && msgs.length > 0) el.scrollTop = el.scrollHeight;
+    if (el === null) return;
+    const onScroll = (): void => {
+      stickRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 60;
+    };
+    el.addEventListener("scroll", onScroll);
+    return () => el.removeEventListener("scroll", onScroll);
+  }, []);
+
+  React.useEffect(() => {
+    const el = scrollRef.current;
+    if (el !== null && msgs.length > 0 && stickRef.current) el.scrollTop = el.scrollHeight;
   }, [msgs]);
 
   const wireFor = (list: ChatMsg[]): WireMessage[] =>
@@ -1457,7 +1490,7 @@ function App() {
                 <Stat label="retracted" value={fmtNum(snap?.faults.retractedTotal ?? null, 0)} />
                 <Stat label="preempted" value={fmtNum(snap?.faults.preemptedTotal ?? null, 0)} />
               </div>
-              <Row label="scope" value="cumulative since engine start" />
+              <div className="caption">cumulative since engine start</div>
             </Card>
 
             <Card title="extras">
