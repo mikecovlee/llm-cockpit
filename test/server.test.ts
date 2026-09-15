@@ -206,7 +206,9 @@ test("server still boots when configured targets are unusable", async () => {
         const r = await fetch(`http://127.0.0.1:${port}/api/health`);
         if (r.ok) {
           expect(await r.json()).toMatchObject({ ok: true, targets: 0 });
-          const targets = (await (await fetch(`http://127.0.0.1:${port}/api/targets`)).json()) as {
+          const targetsResponse = await fetch(`http://127.0.0.1:${port}/api/targets`);
+          expect(targetsResponse.ok).toBe(true);
+          const targets = (await targetsResponse.json()) as {
             targets: unknown[];
           };
           expect(targets.targets).toEqual([]);
