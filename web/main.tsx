@@ -812,7 +812,7 @@ function App() {
         </div>
       ) : null}
 
-      <div className={view === "monitor" ? undefined : "hidden"}>
+      <div className={`view${view === "monitor" ? "" : " hidden"}`}>
         <>
           <section className="grid4">
             <Card title="requests">
@@ -955,7 +955,7 @@ function App() {
           </section>
         </>
       </div>
-      <div className={view === "chat" ? undefined : "hidden"}>
+      <div className={`view${view === "chat" ? "" : " hidden"}`}>
         <Chat />
       </div>
     </div>
