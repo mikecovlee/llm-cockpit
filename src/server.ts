@@ -266,9 +266,70 @@ const MIME: Record<string, string> = {
   txt: "text/plain; charset=utf-8",
 };
 
+/**
+ * Interleave SSE comment pings into a proxied stream so the connection shows
+ * activity even while the engine is stalled in queue or long prefill.
+ */
+function withSseKeepalive(src: ReadableStream<Uint8Array>): ReadableStream<Uint8Array> {
+  const enc = new TextEncoder();
+  const reader = src.getReader();
+  let active = true;
+  let timer: ReturnType<typeof setInterval> | null = null;
+  const halt = (): void => {
+    active = false;
+    if (timer !== null) {
+      clearInterval(timer);
+      timer = null;
+    }
+  };
+  return new ReadableStream<Uint8Array>({
+    start(c) {
+      timer = setInterval(() => {
+        if (!active) return;
+        try {
+          c.enqueue(enc.encode(": ping\n\n"));
+        } catch {
+          halt();
+        }
+      }, 15000);
+      const pump = (): void => {
+        reader
+          .read()
+          .then(({ done, value }) => {
+            if (!active) return;
+            if (done) {
+              halt();
+              c.close();
+              return;
+            }
+            if (value !== undefined) {
+              try {
+                c.enqueue(value);
+              } catch {
+                halt();
+              }
+            }
+            pump();
+          })
+          .catch(() => {
+            if (!active) return;
+            halt();
+            c.error(new Error("upstream stream failed"));
+          });
+      };
+      pump();
+    },
+    cancel(reason) {
+      halt();
+      reader.cancel(reason).catch(() => {});
+    },
+  });
+}
+
 const server = serve({
   hostname: serverCfg.host,
   port: serverCfg.port,
+  idleTimeout: 255,
   async fetch(req: Request) {
     const u = new URL(req.url);
 
@@ -355,7 +416,10 @@ const server = serve({
           const detail = await r.text();
           return jsonResponse({ ok: false, status: r.status, error: detail.slice(0, 2000) }, 502);
         }
-        return new Response(r.body, {
+        if (r.body === null) {
+          return jsonResponse({ ok: false, error: "upstream returned no body" }, 502);
+        }
+        return new Response(withSseKeepalive(r.body), {
           headers: {
             "content-type": "text/event-stream; charset=utf-8",
             "cache-control": "no-cache",
