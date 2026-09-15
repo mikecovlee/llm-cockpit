@@ -292,8 +292,8 @@ function Stat({ label, value, sub }: { label: string; value: string; sub?: strin
 function Row({ label, value }: { label: string; value: string }) {
   return (
     <div className="row">
-      <span>{label}</span>
-      <b>{value}</b>
+      <span title={label}>{label}</span>
+      <b title={value}>{value}</b>
     </div>
   );
 }
