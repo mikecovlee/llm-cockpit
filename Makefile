@@ -16,7 +16,19 @@ ROOT   := $(abspath .)
 OUT    ?= $(ROOT)-dist
 RUN    := docker run --rm -v $(ROOT):/work -v $(VOLUME):/work/node_modules -w /work
 
-.PHONY: shell install test typecheck lint run image binary fixup
+.PHONY: help shell install test typecheck lint run image binary fixup clean
+
+help:
+	@echo "targets:"
+	@echo "  make run        dev server in container (auto --gpus, self-installing) -> :7777"
+	@echo "  make test       unit + integration tests"
+	@echo "  make typecheck  tsc --noEmit"
+	@echo "  make lint       biome check"
+	@echo "  make image      build the runtime image (llm-cockpit:dev)"
+	@echo "  make binary     compile linux-x64 binary + web/ to ../cockpit-dist"
+	@echo "  make shell      interactive container bash"
+	@echo "  make fixup      return volume-mountpoint/bun.lock ownership to you"
+	@echo "  make clean      remove host stubs + export dir"
 
 shell:
 	$(RUN) -it --network host $(IMG) bash
@@ -47,3 +59,7 @@ binary:
 # working tree; hand them to the invoking user (run when no container is up)
 fixup:
 	docker run --rm -e PUID=$(IDU) -e PGID=$(IDG) -v $(ROOT):/work $(IMG) sh -c 'chown $(IDU):$(IDG) /work/dist /work/node_modules /work/bun.lock 2>/dev/null || true'
+
+clean:
+	docker run --rm -v $(ROOT):/work -w /work $(IMG) sh -c 'rm -rf dist node_modules'
+	rm -rf $(abspath $(OUT))

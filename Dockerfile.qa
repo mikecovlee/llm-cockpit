@@ -2,6 +2,7 @@ FROM oven/bun:1.4.2
 ENV PLAYWRIGHT_DOWNLOAD_HOST=https://npmmirror.com/mirrors/playwright
 # Debian 13 (trixie) chromium runtime deps; t64 names for the time_t transition.
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    fonts-noto-cjk \
     libasound2t64 libatk1.0-0t64 libatk-bridge2.0-0t64 libcups2t64 \
     libdrm2 libgbm1 libnspr4 libnss3 libpango-1.0-0 libcairo2 \
     libx11-6 libxcomposite1 libxdamage1 libxext6 libxfixes3 libxkbcommon0 \

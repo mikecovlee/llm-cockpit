@@ -1,0 +1,75 @@
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  binary:
+    runs-on: ubuntu-latest
+    container: oven/bun:1.4.2
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: gates
+        run: |
+          bun install --frozen-lockfile
+          bun test
+          bunx tsc --noEmit
+          bunx biome check .
+          bun run scripts/build.ts
+      - name: package
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          STAGE="dist-export/llm-cockpit"
+          mkdir -p "$STAGE"
+          bun build --compile --target=bun-linux-x64 src/server.ts --outfile "$STAGE/llm-cockpit"
+          cp -r dist/web "$STAGE/web"
+          cp LICENSE README.md "$STAGE/"
+          tar czf llm-cockpit-linux-x64.tar.gz -C dist-export llm-cockpit
+          sha256sum llm-cockpit-linux-x64.tar.gz > llm-cockpit-linux-x64.tar.gz.sha256
+          echo "packed v$VERSION ($(du -h llm-cockpit-linux-x64.tar.gz | cut -f1))"
+      - name: extract release notes
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          awk -v want="[$VERSION]" '$0 ~ "^## "want" -" {found=1; next} found && /^## \[/ {exit} found {print}' CHANGELOG.md > release-notes.md
+          test -s release-notes.md
+      - name: create release + upload assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: >
+          bun -e 'const t = process.env.GITHUB_REF_NAME;
+          const body = await Bun.file("release-notes.md").text();
+          const api = `https://api.github.com/repos/${process.env.GITHUB_REPOSITORY}`;
+          const h = { authorization: `Bearer ${process.env.GH_TOKEN}`, "user-agent": "llm-cockpit-ci" };
+          const rel = await fetch(`${api}/releases`, { method: "POST", headers: { ...h, "content-type": "application/json" }, body: JSON.stringify({ tag_name: t, name: t, body, prerelease: false }) });
+          if (!rel.ok && rel.status !== 422) { console.error("release create:", rel.status, await rel.text()); process.exit(1); }
+          const { upload_url: up } = await (await fetch(`${api}/releases/tags/${t}`, { headers: h })).json();
+          const asset = async (file, type) => {
+            const r = await fetch(`${up}?name=${encodeURIComponent(file)}`, { method: "POST", headers: { ...h, "content-type": type }, body: Bun.file(file) });
+            if (!r.ok) { console.error("upload:", file, r.status, await r.text()); process.exit(1); }
+            console.log("asset:", (await r.json()).browser_download_url);
+          };
+          const v = t.replace(/^v/, "");
+          await asset("llm-cockpit-linux-x64.tar.gz", "application/gzip");
+          await asset("llm-cockpit-linux-x64.tar.gz.sha256", "text/plain");'
+
+  image:
+    runs-on: ubuntu-latest
+    needs: binary
+    permissions:
+      packages: write
+      contents: read
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: build
+        run: docker build -t "ghcr.io/${GITHUB_REPOSITORY}:${GITHUB_REF_NAME}" -t "ghcr.io/${GITHUB_REPOSITORY}:latest" .
+      - name: push
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "$GITHUB_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          docker push "ghcr.io/${GITHUB_REPOSITORY}:${GITHUB_REF_NAME}"
+          docker push "ghcr.io/${GITHUB_REPOSITORY}:latest"

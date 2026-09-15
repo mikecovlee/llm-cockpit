@@ -1,0 +1,35 @@
+name: Feature request
+description: Improve the cockpit, chat, adapters, or tooling
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: The workflow that hurts today — not the solution, the pain.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Scope check
+      description: >-
+        llm-cockpit is deliberately a lightweight single-process, single-operator
+        console with no database and no auth. Multi-user, RAG/knowledge bases,
+        evals/prompt management and code execution are out of scope by design —
+        say how this request stays (or argues to move) within that shape.
+      options:
+        - Within the current scope
+        - Would extend the scope
+    validations:
+      required: true

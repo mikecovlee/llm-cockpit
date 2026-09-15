@@ -1,5 +1,9 @@
 # llm-cockpit
 
+[![CI](https://github.com/mikecovlee/llm-cockpit/actions/workflows/ci.yml/badge.svg)](https://github.com/mikecovlee/llm-cockpit/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/mikecovlee/llm-cockpit)](https://github.com/mikecovlee/llm-cockpit/releases)
+[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+
 Multi-engine inference console: a live metrics cockpit plus an OpenAI-compatible
 chat window, in one process.
 
@@ -11,7 +15,26 @@ model — adding a new engine means one small adapter file, not a UI rewrite.
 |---|---|
 | ![monitor](screenshots/m3-monitor.png) | ![chat](screenshots/m3-chat-reply.png) |
 
-## Quick start
+## Install
+
+**Prebuilt binary (Linux x86-64)** — one file, no runtime needed:
+
+```bash
+curl -LO https://github.com/mikecovlee/llm-cockpit/releases/latest/download/llm-cockpit-linux-x64.tar.gz
+tar xzf llm-cockpit-linux-x64.tar.gz
+cd llm-cockpit && ./llm-cockpit   # http://<server>:7777
+```
+
+**Docker (GHCR)**:
+
+```bash
+docker run -d --name cockpit --restart unless-stopped \
+  -p 7777:7777 --gpus all \
+  -v "$PWD/cockpit.config.yaml":/app/cockpit.config.yaml:ro \
+  ghcr.io/mikecovlee/llm-cockpit:latest
+```
+
+**From source** (needs only Docker — the whole toolchain runs in containers):
 
 ```bash
 make run     # self-installing dev server → http://<server-ip>:7777 (binds 0.0.0.0)
@@ -19,10 +42,29 @@ make test    # unit tests in a container
 make image   # build the runtime image
 ```
 
-Requirements: Docker only (a `node_modules` docker volume is created on first
-use — the host working tree is never written to). You also want a running
-inference engine that exposes Prometheus metrics at `/metrics`
-(SGLang: start with `--enable-metrics`).
+## Why llm-cockpit
+
+If you already run Prometheus + Grafana, you have engine metrics — llm-cockpit is
+for everyone else who wants the same visibility without assembling a stack:
+
+| | llm-cockpit | Grafana + SGLang/vLLM dashboards | Open WebUI (+ separate monitoring) |
+|---|---|---|---|
+| footprint | 1 binary / 1 container | ≥3 containers + TSDB | 1 heavy container + DB |
+| setup | zero-config default | Prometheus + dashboard import | model/provider admin UI |
+| engine-agnostic | adapters + declarative YAML | per-engine dashboards (metric renames break them) | chat-only view of models |
+| metrics + chat | same page | not a chat UI | not an engine console |
+| GPU panel | built-in (nvidia-smi) | needs dcgm-exporter | ✗ |
+
+What it deliberately is **not**: multi-user, RAG/knowledge bases, prompt
+evals, per-request tracing/long-term retention (in-memory 15-min window only,
+nothing on disk). Those are different products — see SECURITY.md for the
+trusted-network posture.
+
+Requirements: any inference engine exposing Prometheus metrics at `/metrics`
+(SGLang: start with `--enable-metrics`). Full config reference:
+[docs/CONFIGURATION.md](docs/CONFIGURATION.md) · adding engines:
+[docs/ADAPTERS.md](docs/ADAPTERS.md) · design:
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 Zero-config: monitors `http://127.0.0.1:8080` with the engine auto-detected
 (SGLang `/get_server_info`, vLLM `/version`); chat defaults to that same engine's
@@ -205,10 +247,11 @@ llm-cockpit 是一个多引擎推理控制台:一个进程里同时提供**实�
   去请求其指定的 URL。请务必置于可信内网/VPN 并防火墙该端口;更严格的部署可设
   `server.host: 127.0.0.1` 再配合带鉴权的反向代理。
 
-快速开始:`make run` → 打开 `http://<服务器IP>:7777`(默认监听 `0.0.0.0`,
+快速开始:三种安装见上文 **Install**(预编译二进制 / GHCR 镜像 / 源码 `make run`)。
+零配置启动后打开 `http://<服务器IP>:7777`(默认监听 `0.0.0.0`,
 适配无头服务器;默认监控本机 8080 的 SGLang,自动探测引擎;SGLang 需
 `--enable-metrics` 启动。如需仅本机访问,配置里把 `server.host` 改回
-`127.0.0.1`)。
+`127.0.0.1`)。配置、适配器与架构文档见 [docs/](docs/)。
 
 ## License
 

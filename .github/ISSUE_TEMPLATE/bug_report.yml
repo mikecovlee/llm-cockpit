@@ -1,0 +1,45 @@
+name: Bug report
+description: Something crashes, renders wrong, or misreports metrics
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, what you got instead. Screenshots help a lot.
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: Install method
+      options:
+        - Prebuilt binary (tar.gz)
+        - Docker image (ghcr.io)
+        - make run from source
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: llm-cockpit version
+      description: git describe --tags / release tag / console startup log
+    validations:
+      required: true
+  - type: input
+    id: engine
+    attributes:
+      label: Engine & version being monitored
+      description: e.g. SGLang v0.5.19, vLLM 0.6.x, custom (which?)
+  - type: textarea
+    id: config
+    attributes:
+      label: Config
+      description: cockpit.config.yaml — REDACT any api_key before pasting!
+      render: yaml
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs / browser console errors
+      render: shell
