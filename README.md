@@ -25,9 +25,9 @@ inference engine that exposes Prometheus metrics at `/metrics`
 (SGLang: start with `--enable-metrics`).
 
 Zero-config: monitors `http://127.0.0.1:8080` with the engine auto-detected
-(SGLang `/get_server_info`, vLLM `/version`). Multiple targets, custom adapters,
-the chat endpoint and the bind address come from `cockpit.config.yaml`
-(copy `cockpit.config.example.yaml`).
+(SGLang `/get_server_info`, vLLM `/version`); chat defaults to that same engine's
+`/v1`. Multiple targets, chat providers, custom adapters and the bind address
+come from `cockpit.config.yaml` (copy `cockpit.config.example.yaml`).
 
 ## The monitor
 
@@ -46,12 +46,15 @@ Polling is every 2 s against the server's in-memory ring (15 min window).
 
 ## The chat
 
-The chat window talks to any OpenAI-compatible API (default: the same engine at
-`/v1`). Streaming responses render markdown with syntax highlighting; reasoning
-models get a collapsible "thinking" block. `⏎` sends, `⇧⏎` inserts a newline,
-stop aborts in-flight generation. The proxy injects SSE keepalive comments every
-15 s, so queue/prefill stalls of minutes survive any socket idle timeout; a
-10-minute absolute deadline bounds truly dead upstreams.
+The chat window talks to any OpenAI-compatible API. Configure **multiple
+providers** (`chat.providers` — e.g. the monitored local engine plus DeepSeek
+or any gateway); one grouped dropdown picks `provider · model`, and requests
+route to the selected provider. Keys stay server-side (`/api/chat/providers`
+exposes ids and names only). Streaming responses render markdown with syntax
+highlighting; reasoning models get a collapsible "thinking" block. `⏎` sends,
+`⇧⏎` inserts a newline, stop aborts in-flight generation. The proxy injects SSE
+keepalive comments every 15 s, so queue/prefill stalls of minutes survive any
+socket idle timeout; a 10-minute absolute deadline bounds truly dead upstreams.
 
 **Vision**: the `+` button attaches up to 4 images (original files ≤ 8 MB) to a
 message; text and images coexist in one message. Large images are
@@ -101,8 +104,9 @@ metrics are missing): `POST /api/validate-mapping`.
 | `GET /api/snapshot?target=id` | latest normalized snapshot |
 | `GET /api/history?target=id&sec=600` | rolling ring (≤ 15 min @ 2 s); `&compact=1` → chart scalars only |
 | `POST /api/validate-mapping` | validate a custom adapter + live probe |
-| `GET /api/chat/models` | model list from the configured chat endpoint |
-| `POST /api/chat/stream` | SSE proxy → OpenAI `chat/completions` (stream, ≤12 MB body) |
+| `GET /api/chat/providers` | configured chat providers (ids/names only, no keys) |
+| `GET /api/chat/models?provider=id` | model list from one provider (omitted = default) |
+| `POST /api/chat/stream?provider=id` | SSE proxy → OpenAI `chat/completions` (stream, ≤12 MB body) |
 
 All numeric fields in the canonical model are nullable — the shape is stable
 across engines; capabilities (`mamba`, `hicache`, `prefixCache`) tell the UI
@@ -165,7 +169,9 @@ llm-cockpit 是一个多引擎推理控制台:一个进程里同时提供**实�
 - **规范模型**:所有引擎的指标被归一化为同一套结构(请求数、吞吐、KV 缓存、
   延迟直方图 p50/p90/p99、故障计数、extras),UI 只渲染引擎真实上报的字段
   (能力驱动,缺失即隐藏)。
-- **对话窗口**:代理到任意 OpenAI-compatible API,支持 SSE 流式、reasoning
+- **对话窗口**:可配置**多个 provider**(`chat.providers`,如下拉中的
+  "DeepSeek · deepseek-flash";监控后端天然是默认 provider,api_key 只留在
+  服务端),代理到任意 OpenAI-compatible API,支持 SSE 流式、reasoning
   模型 thinking 折叠、markdown + 代码高亮、随时停止;`+` 按钮可附加图片
   (每条最多 4 张、单张原始文件 ≤8MB,浏览器端自动压到 ≤1280px JPEG 再上传——
   原图直发会膨胀成十几万 token 把引擎卡死;需视觉模型支持)。文字与图片可在

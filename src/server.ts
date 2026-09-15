@@ -18,7 +18,13 @@ import {
 import { fetchText } from "./adapters/http.ts";
 import { autoDetect, builtins } from "./adapters/index.ts";
 import type { EngineAdapter } from "./adapters/types.ts";
-import { type ChatConfig, chatStream, listModels } from "./chat/openai.ts";
+import { chatStream, listModels } from "./chat/openai.ts";
+import {
+  type ChatProviderSpec,
+  pickProvider,
+  publicProviders,
+  resolveChatProviders,
+} from "./chat/providers.ts";
 import { histogramToQuantiles } from "./core/derive.ts";
 import { withSseKeepalive } from "./core/keepalive.ts";
 import type { HistogramBuckets, Snapshot } from "./core/model.ts";
@@ -36,7 +42,7 @@ interface TargetConfig {
 
 interface AppConfig {
   targets?: TargetConfig[];
-  chat?: { base_url?: string; api_key?: string };
+  chat?: { providers?: ChatProviderSpec[] };
   custom?: CustomAdapterSpec[];
   server?: { host?: string; port?: number; poll_interval_s?: number };
 }
@@ -61,10 +67,17 @@ function loadConfig(): AppConfig {
 }
 
 const config = loadConfig();
-const chatBase: ChatConfig = {
-  baseUrl: config.chat?.base_url ?? "http://127.0.0.1:8080/v1",
-  apiKey: config.chat?.api_key ?? null,
-};
+const firstTargetUrl =
+  typeof config.targets?.[0]?.url === "string"
+    ? (config.targets[0] as { url: string }).url
+    : "http://127.0.0.1:8080";
+const resolvedChat = resolveChatProviders(config.chat?.providers, firstTargetUrl);
+if (resolvedChat.errors.length > 0) {
+  console.error("[config] invalid chat.providers:");
+  for (const e of resolvedChat.errors) console.error(`  ${e}`);
+  process.exit(1);
+}
+const chatProviders = resolvedChat.list;
 const serverCfg = {
   host: config.server?.host ?? "0.0.0.0",
   port: config.server?.port ?? 7777,
@@ -413,15 +426,25 @@ const server = serve({
       return validateMappingHandler(req);
     }
 
+    if (u.pathname === "/api/chat/providers") {
+      return jsonResponse(publicProviders(chatProviders));
+    }
+
     if (u.pathname === "/api/chat/models") {
+      const provider = pickProvider(chatProviders, u.searchParams.get("provider"));
+      if (provider === undefined)
+        return jsonResponse(
+          { ok: false, error: `unknown provider '${u.searchParams.get("provider")}'` },
+          404,
+        );
       try {
-        const r = await listModels(chatBase);
+        const r = await listModels(provider.cfg);
         const body = await r.text();
         if (!r.ok) {
           return jsonResponse(
             {
               ok: false,
-              error: `chat endpoint ${chatBase.baseUrl}: HTTP ${r.status}`,
+              error: `chat endpoint ${provider.id} (${provider.cfg.baseUrl}): HTTP ${r.status}`,
             },
             r.status >= 500 ? 502 : r.status === 404 ? 404 : 502,
           );
@@ -429,7 +452,10 @@ const server = serve({
         return new Response(body, { headers: { "content-type": "application/json" } });
       } catch {
         return jsonResponse(
-          { ok: false, error: `chat endpoint unreachable (${chatBase.baseUrl})` },
+          {
+            ok: false,
+            error: `chat endpoint unreachable (${provider.id}: ${provider.cfg.baseUrl})`,
+          },
           502,
         );
       }
@@ -449,8 +475,14 @@ const server = serve({
       if (!Array.isArray((payload as { messages?: unknown })?.messages)) {
         return jsonResponse({ ok: false, error: "messages[] is required" }, 400);
       }
+      const provider = pickProvider(chatProviders, u.searchParams.get("provider"));
+      if (provider === undefined)
+        return jsonResponse(
+          { ok: false, error: `unknown provider '${u.searchParams.get("provider")}'` },
+          404,
+        );
       try {
-        const r = await chatStream(chatBase, payload as Record<string, unknown>, req.signal);
+        const r = await chatStream(provider.cfg, payload as Record<string, unknown>, req.signal);
         if (!r.ok) {
           const detail = await r.text();
           return jsonResponse({ ok: false, status: r.status, error: detail.slice(0, 2000) }, 502);
@@ -467,7 +499,10 @@ const server = serve({
         });
       } catch {
         return jsonResponse(
-          { ok: false, error: `chat endpoint unreachable (${chatBase.baseUrl})` },
+          {
+            ok: false,
+            error: `chat endpoint unreachable (${provider.id}: ${provider.cfg.baseUrl})`,
+          },
           502,
         );
       }
@@ -530,6 +565,11 @@ console.log(
 for (const t of targets) {
   console.log(`  - ${t.id}: ${t.url} (adapter=${t.adapter}, status=${t.status})`);
 }
+console.log(
+  `[llm-cockpit] chat providers: ${chatProviders
+    .map((p) => `${p.id}${p.isDefault ? " (default)" : ""}`)
+    .join(", ")}`,
+);
 
 process.on("SIGTERM", () => {
   if (timer !== null) clearTimeout(timer);

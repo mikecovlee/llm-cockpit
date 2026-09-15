@@ -289,10 +289,29 @@ function Bubble({ msg }: { msg: ChatMsg }) {
   );
 }
 
+interface ProviderInfo {
+  id: string;
+  name: string;
+  default: boolean;
+}
+
+interface ProviderGroup {
+  info: ProviderInfo;
+  models: string[];
+  error: string | null;
+}
+
+/** option value form: "<providerId>::<modelId>" — provider ids cannot contain
+ * ":" (config regex), so the first "::" split is unambiguous. */
+const splitSel = (v: string): { pid: string; model: string } | null => {
+  const i = v.indexOf("::");
+  return i < 0 ? null : { pid: v.slice(0, i), model: v.slice(i + 2) };
+};
+
 function Chat() {
-  const [model, setModel] = React.useState<string>("");
-  const [models, setModels] = React.useState<string[]>([]);
-  const [modelErr, setModelErr] = React.useState<string | null>(null);
+  const [sel, setSel] = React.useState<string>("");
+  const [groups, setGroups] = React.useState<ProviderGroup[]>([]);
+  const [chatErr, setChatErr] = React.useState<string | null>(null);
   const [msgs, setMsgs] = React.useState<ChatMsg[]>([]);
   const [input, setInput] = React.useState("");
   const [busy, setBusy] = React.useState(false);
@@ -361,24 +380,40 @@ function Chat() {
 
   React.useEffect(() => {
     let stop = false;
-    fetch("/api/chat/models")
-      .then((r) => r.json() as Promise<{ data?: { id: string }[]; ok?: boolean; error?: string }>)
-      .then((d) => {
+    void (async (): Promise<void> => {
+      try {
+        const pr = await fetch("/api/chat/providers");
+        const pj = (await pr.json()) as { providers?: ProviderInfo[]; default?: string };
+        const infos = Array.isArray(pj.providers) ? pj.providers : [];
+        const loaded = await Promise.all(
+          infos.map(async (info): Promise<ProviderGroup> => {
+            try {
+              const r = await fetch(`/api/chat/models?provider=${encodeURIComponent(info.id)}`);
+              const d = (await r.json()) as {
+                data?: { id: string }[];
+                ok?: boolean;
+                error?: string;
+              };
+              const ms = r.ok ? (d.data ?? []).map((m) => m.id) : [];
+              return {
+                info,
+                models: ms,
+                error: r.ok ? (ms.length === 0 ? "no models" : null) : (d.error ?? "unreachable"),
+              };
+            } catch {
+              return { info, models: [], error: "unreachable" };
+            }
+          }),
+        );
         if (stop) return;
-        const list = (d.data ?? []).map((m) => m.id);
-        if (list.length > 0) {
-          setModels(list);
-          setModel((cur) => (cur !== "" ? cur : list[0]!));
-          setModelErr(null);
-        } else if (d.ok === false) {
-          setModelErr(d.error ?? "cannot list models");
-        } else {
-          setModelErr("no models reported by the chat endpoint");
-        }
-      })
-      .catch(() => {
-        if (!stop) setModelErr("chat endpoint unreachable");
-      });
+        setGroups(loaded);
+        const def = loaded.find((g) => g.info.id === pj.default) ?? loaded[0];
+        const first = def?.models[0];
+        if (def !== undefined && first !== undefined) setSel(`${def.info.id}::${first}`);
+      } catch {
+        if (!stop) setChatErr("cannot reach chat API");
+      }
+    })();
     return () => {
       stop = true;
     };
@@ -391,7 +426,9 @@ function Chat() {
 
   const send = async (): Promise<void> => {
     const text = input.trim();
-    if ((text === "" && pendingImages.length === 0) || busy || model === "") return;
+    const cur = splitSel(sel);
+    if ((text === "" && pendingImages.length === 0) || busy || cur === null || cur.model === "")
+      return;
     const history = msgs.map((m): { role: string; content: string | ContentPart[] } => ({
       role: m.role,
       content: toContent(m.content, m.images !== undefined ? m.images : []),
@@ -416,10 +453,10 @@ function Chat() {
     let acc = "";
     let think = "";
     try {
-      const r = await fetch("/api/chat/stream", {
+      const r = await fetch(`/api/chat/stream?provider=${encodeURIComponent(cur.pid)}`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ model, messages: history }),
+        body: JSON.stringify({ model: cur.model, messages: history }),
         signal: ctl.signal,
       });
       if (!r.ok) {
@@ -498,29 +535,42 @@ function Chat() {
       <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 12 }}>
         <select
           className="sel"
-          value={model}
-          onChange={(e) => setModel(e.target.value)}
+          value={sel}
+          onChange={(e) => setSel(e.target.value)}
           disabled={busy}
         >
-          {models.length === 0 ? (
-            <option value="">{modelErr ?? "loading models…"}</option>
-          ) : (
-            models.map((m) => (
-              <option key={m} value={m}>
-                {m}
-              </option>
-            ))
-          )}
+          {groups.length === 0 ? <option value="">{chatErr ?? "loading models…"}</option> : null}
+          {groups.map((g) => (
+            <optgroup
+              key={g.info.id}
+              label={g.error !== null ? `${g.info.name} (${g.error})` : g.info.name}
+            >
+              {g.models.length === 0 ? (
+                <option disabled value={`${g.info.id}::`}>
+                  no models
+                </option>
+              ) : (
+                g.models.map((m) => (
+                  <option key={`${g.info.id}::${m}`} value={`${g.info.id}::${m}`}>
+                    {m}
+                  </option>
+                ))
+              )}
+            </optgroup>
+          ))}
         </select>
         <span className="chat-hint" style={{ marginTop: 0 }}>
-          {modelErr !== null ? modelErr : "OpenAI-compatible · ⏎ send · ⇧⏎ newline"}
+          {chatErr ??
+            (groups.length === 0
+              ? "loading…"
+              : sel === ""
+                ? (groups[0]?.error ?? "no usable model")
+                : "OpenAI-compatible · ⏎ send · ⇧⏎ newline")}
         </span>
       </div>
       <div className="chat-msgs" ref={scrollRef}>
         {msgs.length === 0 ? (
-          <div className="empty">
-            ask the engine something — chat goes through the OpenAI-compatible endpoint
-          </div>
+          <div className="empty">ask anything — chat is proxied to the selected provider</div>
         ) : null}
         {msgs.map((m) => (
           <Bubble key={m.id} msg={m} />
@@ -566,7 +616,9 @@ function Chat() {
         />
         <textarea
           value={input}
-          placeholder={model === "" ? "waiting for model list…" : `message ${model}…`}
+          placeholder={
+            sel === "" ? "waiting for model list…" : `message ${splitSel(sel)?.model ?? ""}…`
+          }
           rows={2}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => {
@@ -584,7 +636,11 @@ function Chat() {
           <button
             type="button"
             className="chat-btn"
-            disabled={(input.trim() === "" && pendingImages.length === 0) || model === ""}
+            disabled={
+              (input.trim() === "" && pendingImages.length === 0) ||
+              splitSel(sel)?.model === "" ||
+              splitSel(sel) === null
+            }
             onClick={() => void send()}
           >
             send

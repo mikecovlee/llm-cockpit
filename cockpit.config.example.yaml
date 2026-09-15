@@ -10,10 +10,18 @@ targets:
     # adapter: sglang            # force: sglang | vllm | (omit for auto-detect)
     # custom: my-engine         # reference a custom adapter from `custom:` below
 
-# Chat connector: any OpenAI-compatible API. Independent of the metrics targets.
+# Chat connectors: any number of OpenAI-compatible providers, selectable in the
+# chat dropdown. Independent of the metrics targets. With no `providers:` list,
+# a single "local" provider is derived from the first target (+ /v1).
 chat:
-  base_url: http://127.0.0.1:8080/v1
-  # api_key: sk-...             # optional; many self-hosted engines need none
+  providers:
+    - id: local                # first entry is the default (or mark default: true)
+      name: Local SGLang
+      base_url: http://127.0.0.1:8080/v1
+    # - id: deepseek
+    #   name: DeepSeek
+    #   base_url: https://api.deepseek.com/v1
+    #   api_key: sk-...         # optional per provider; never sent to the browser
 
 # Optional declarative adapters for custom engines (or non-Prometheus JSON APIs).
 # `source: prometheus` — mapping values are metric names from the url's /metrics text.
