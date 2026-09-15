@@ -226,7 +226,17 @@ function LineChart({ series, labels }: { series: Series[]; labels: string[] }) {
     chart.setOption({
       backgroundColor: "transparent",
       grid: { left: 46, right: 26, top: series.length > 1 ? 30 : 18, bottom: 22 },
-      tooltip: { trigger: "axis" },
+      tooltip: {
+        trigger: "axis",
+        appendToBody: true,
+        extraCssText: "z-index: 120;",
+        valueFormatter: (v: unknown): string =>
+          typeof v === "number"
+            ? Math.abs(v) >= 1000
+              ? v.toLocaleString("en-US", { maximumFractionDigits: 0 })
+              : String(Math.round(v * 100) / 100)
+            : "—",
+      },
       legend:
         series.length > 1
           ? { top: 0, textStyle: { color: "#8b949e", fontSize: 11 }, itemWidth: 14, itemHeight: 8 }
