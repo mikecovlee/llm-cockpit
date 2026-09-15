@@ -49,10 +49,12 @@ The chat window talks to any OpenAI-compatible API (default: the same engine at
 models get a collapsible "thinking" block. `⏎` sends, `⇧⏎` inserts a newline,
 stop aborts in-flight generation.
 
-**Vision**: the `+` button attaches up to 4 images (≤ 8MB each) to a message.
-Images are sent as inline base64 `image_url` content parts, so the same endpoint
-serves text and multimodal traffic — the chat model must be vision-capable
-(e.g. a Qwen-VL serving) for image inputs to work.
+**Vision**: the `+` button attaches up to 4 images to a message. Large images are
+auto-downscaled in the browser (≤ 1280px per side, JPEG q0.85) before upload — a
+4000×3000 phone photo would otherwise expand to 100k+ vision tokens and stall the
+engine's prefill for minutes. Images are sent as inline base64 `image_url` content
+parts (proxy hard cap: 12 MB), so the same endpoint serves text and multimodal
+traffic — the chat model must be vision-capable (e.g. a Qwen-VL serving).
 
 ## Custom engines (no code)
 
@@ -129,7 +131,8 @@ llm-cockpit 是一个多引擎推理控制台:一个进程里同时提供**实�
   (能力驱动,缺失即隐藏)。
 - **对话窗口**:代理到任意 OpenAI-compatible API,支持 SSE 流式、reasoning
   模型 thinking 折叠、markdown + 代码高亮、随时停止;`+` 按钮可附加图片
-  (每条最多 4 张、单张 ≤8MB,以 base64 内联发送,需视觉模型支持)。
+  (每条最多 4 张,浏览器端自动压到 ≤1280px JPEG 再上传——原图直发会膨胀成
+  十几万 token 把引擎卡死;需视觉模型支持)。
 - **容器化工具链**:`make run / test / typecheck / lint / image / binary`
   全部在容器内执行,不污染宿主机。
 

@@ -1,7 +1,13 @@
 /** vLLM adapter: /metrics (Prometheus) + /version + /health. */
 
 import { emptySnapshot, type HistogramBuckets, type Snapshot } from "../core/model.ts";
-import { findHistogram, findSeries, type Parsed, parsePrometheus } from "../core/prom.ts";
+import {
+  findHistogram,
+  findSeries,
+  type Parsed,
+  parsePrometheus,
+  sumSeries,
+} from "../core/prom.ts";
 import { fetchText, stripSlashes } from "./http.ts";
 import type { AdapterMeta, EngineAdapter } from "./types.ts";
 
@@ -10,6 +16,10 @@ const V = "vllm:";
 function gauge(p: Parsed, name: string): number | null {
   const s = findSeries(p, `${V}${name}`);
   return s === null ? null : s.value;
+}
+
+function counter(p: Parsed, name: string): number | null {
+  return sumSeries(p, `${V}${name}`);
 }
 
 function gaugeAlt(p: Parsed, primary: string, fallback: string): number | null {
@@ -36,16 +46,16 @@ export function normalizeVllm(p: Parsed, meta: AdapterMeta, ts: number): Snapsho
   s.requests.running = gauge(p, "num_requests_running");
   s.requests.queued = gauge(p, "num_requests_waiting");
   s.requests.swapped = gauge(p, "num_requests_swapped");
-  s.faults.preemptedTotal = gauge(p, "num_preemptions_total");
+  s.faults.preemptedTotal = counter(p, "num_preemptions_total");
 
   s.cache.kvUsagePct = gaugeAlt(p, "kv_cache_usage_perc", "gpu_cache_usage_perc");
-  s.cache.prefixHitsTotal = gauge(p, "prefix_cache_hits_total");
-  s.cache.prefixQueriesTotal = gauge(p, "prefix_cache_queries_total");
+  s.cache.prefixHitsTotal = counter(p, "prefix_cache_hits_total");
+  s.cache.prefixQueriesTotal = counter(p, "prefix_cache_queries_total");
   if (s.cache.prefixHitsTotal !== null) s.capabilities.prefixCache = true;
 
-  s.tokens.promptTotal = gauge(p, "prompt_tokens_total");
-  s.tokens.generationTotal = gauge(p, "generation_tokens_total");
-  s.counts.requestsCompletedTotal = gauge(p, "request_success_total");
+  s.tokens.promptTotal = counter(p, "prompt_tokens_total");
+  s.tokens.generationTotal = counter(p, "generation_tokens_total");
+  s.counts.requestsCompletedTotal = counter(p, "request_success_total");
 
   s.throughput.generationTps = gauge(p, "avg_generation_throughput_toks_per_s");
   s.throughput.prefillTps = gauge(p, "avg_prompt_throughput_toks_per_s");

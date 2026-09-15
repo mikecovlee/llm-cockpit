@@ -337,6 +337,9 @@ const server = serve({
     if (u.pathname === "/api/chat/stream") {
       if (req.method !== "POST")
         return jsonResponse({ ok: false, error: "method not allowed" }, 405);
+      const len = Number(req.headers.get("content-length") ?? "0");
+      if (len > 12 * 1024 * 1024)
+        return jsonResponse({ ok: false, error: "payload exceeds 12MB" }, 413);
       let payload: unknown;
       try {
         payload = await req.json();

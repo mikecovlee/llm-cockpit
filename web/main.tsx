@@ -292,11 +292,29 @@ function Chat() {
       }
       const reader = new FileReader();
       reader.onload = (): void => {
-        if (typeof reader.result === "string") {
-          setPendingImages((prev) =>
-            [...prev, { id: crypto.randomUUID(), url: reader.result as string }].slice(0, 4),
-          );
-        }
+        if (typeof reader.result !== "string") return;
+        const raw = reader.result;
+        const img = new Image();
+        img.onload = (): void => {
+          const maxSide = Math.max(img.naturalWidth, img.naturalHeight);
+          let url = raw;
+          if (maxSide > 1280 || raw.length > 2 * 1024 * 1024) {
+            const scale = Math.min(1, 1280 / Math.max(1, maxSide));
+            const canvas = document.createElement("canvas");
+            canvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
+            canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
+            const ctx = canvas.getContext("2d");
+            if (ctx !== null) {
+              ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+              url = canvas.toDataURL("image/jpeg", 0.85);
+            }
+          }
+          setPendingImages((prev) => [...prev, { id: crypto.randomUUID(), url }].slice(0, 4));
+        };
+        img.onerror = (): void => {
+          setAttachError(`${file.name} could not be decoded — skipped.`);
+        };
+        img.src = raw;
       };
       reader.readAsDataURL(file);
     }
@@ -683,7 +701,7 @@ function App() {
     kv.hostTotalTokens > 0
       ? kv.hostUsedTokens / kv.hostTotalTokens
       : null;
-  const hitRate = kv !== null ? (kv.hitRate ?? kv.rollingHitRate) : null;
+  const hitRate = kv !== null ? (kv.rollingHitRate ?? kv.hitRate) : null;
 
   if (booted && targets.length === 0) {
     return (

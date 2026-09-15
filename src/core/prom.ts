@@ -147,6 +147,22 @@ export function findSeries(
   return null;
 }
 
+/** Sum every series sharing a metric name — counters split by labels
+ * (e.g. sglang's is_streaming, cache_source, pool) must aggregate. */
+export function sumSeries(
+  p: Parsed,
+  name: string,
+  labelMatch?: Record<string, string>,
+): number | null {
+  let total: number | null = null;
+  for (const s of [...p.gauges, ...p.counters]) {
+    if (s.name !== name) continue;
+    if (labelMatch !== undefined && !matchesLabels(s.labels, labelMatch)) continue;
+    total = (total ?? 0) + s.value;
+  }
+  return total;
+}
+
 export function findHistogram(
   p: Parsed,
   name: string,

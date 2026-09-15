@@ -1,7 +1,13 @@
 /** SGLang adapter: /metrics (Prometheus) + /get_server_info + /health. */
 
 import { emptySnapshot, type HistogramBuckets, type Snapshot } from "../core/model.ts";
-import { findHistogram, findSeries, type Parsed, parsePrometheus } from "../core/prom.ts";
+import {
+  findHistogram,
+  findSeries,
+  type Parsed,
+  parsePrometheus,
+  sumSeries,
+} from "../core/prom.ts";
 import { fetchText, stripSlashes } from "./http.ts";
 import type { AdapterMeta, EngineAdapter } from "./types.ts";
 
@@ -11,6 +17,10 @@ const G_ALT = "sglang_";
 function gauge(p: Parsed, name: string): number | null {
   const s = findSeries(p, `${G}${name}`) ?? findSeries(p, `${G_ALT}${name}`);
   return s === null ? null : s.value;
+}
+
+function counter(p: Parsed, name: string): number | null {
+  return sumSeries(p, `${G}${name}`) ?? sumSeries(p, `${G_ALT}${name}`);
 }
 
 function histogram(p: Parsed, name: string): HistogramBuckets | null {
@@ -31,10 +41,10 @@ export function normalizeSglang(p: Parsed, meta: AdapterMeta, ts: number): Snaps
   s.requests.paused = gauge(p, "num_paused_reqs");
 
   s.throughput.generationTps = gauge(p, "gen_throughput");
-  s.tokens.promptTotal = gauge(p, "prompt_tokens_total");
-  s.tokens.generationTotal = gauge(p, "generation_tokens_total");
-  s.tokens.cachedTotal = gauge(p, "cached_tokens_total");
-  s.counts.requestsCompletedTotal = gauge(p, "num_requests_total");
+  s.tokens.promptTotal = counter(p, "prompt_tokens_total");
+  s.tokens.generationTotal = counter(p, "generation_tokens_total");
+  s.tokens.cachedTotal = counter(p, "cached_tokens_total");
+  s.counts.requestsCompletedTotal = counter(p, "num_requests_total");
 
   s.cache.kvUsagePct = gauge(p, "full_token_usage");
   s.cache.kvUsedTokens = gauge(p, "kv_used_tokens");
@@ -42,7 +52,7 @@ export function normalizeSglang(p: Parsed, meta: AdapterMeta, ts: number): Snaps
   s.cache.hitRate = gauge(p, "cache_hit_rate");
   s.cache.hostUsedTokens = gauge(p, "hicache_host_used_tokens");
   s.cache.hostTotalTokens = gauge(p, "hicache_host_total_tokens");
-  s.faults.retractedTotal = gauge(p, "num_retracted_reqs");
+  s.faults.retractedTotal = counter(p, "num_retracted_reqs");
 
   s.latency.ttft = histogram(p, "time_to_first_token_seconds");
   s.latency.tpot = histogram(p, "inter_token_latency_seconds");
@@ -56,8 +66,12 @@ export function normalizeSglang(p: Parsed, meta: AdapterMeta, ts: number): Snaps
   }
   if (s.cache.hostTotalTokens !== null) s.capabilities.hicache = true;
 
-  s.extras["loadBackTokensTotal"] = gauge(p, "load_back_tokens_total");
+  s.extras["loadBackTokensTotal"] = counter(p, "load_back_tokens_total");
   s.extras["fwdOccupancy"] = gauge(p, "fwd_occupancy");
+
+  if (s.tokens.cachedTotal !== null && s.tokens.promptTotal !== null && s.tokens.promptTotal > 0) {
+    s.cache.rollingHitRate = Math.min(1, s.tokens.cachedTotal / s.tokens.promptTotal);
+  }
 
   if (
     s.cache.hitRate === null &&
