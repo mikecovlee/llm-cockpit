@@ -41,6 +41,6 @@ custom:
   #     engine.model: my-model
 
 server:
-  host: 127.0.0.1        # bind address; use 0.0.0.0 to expose beyond the host
+  host: 0.0.0.0          # bind address; set 127.0.0.1 for local-only access
   port: 7777
   poll_interval_s: 2

@@ -14,7 +14,7 @@ model — adding a new engine means one small adapter file, not a UI rewrite.
 ## Quick start
 
 ```bash
-make run     # dev server in a container → http://127.0.0.1:7777
+make run     # dev server in a container → http://<server-ip>:7777 (binds 0.0.0.0)
 make test    # unit tests (32) in a container
 make image   # build the runtime image
 ```
@@ -133,8 +133,10 @@ llm-cockpit 是一个多引擎推理控制台:一个进程里同时提供**实�
 - **容器化工具链**:`make run / test / typecheck / lint / image / binary`
   全部在容器内执行,不污染宿主机。
 
-快速开始:`make run` → 打开 `http://127.0.0.1:7777`(默认监控本机 8080 的
-SGLang,自动探测引擎;SGLang 需 `--enable-metrics` 启动)。
+快速开始:`make run` → 打开 `http://<服务器IP>:7777`(默认监听 `0.0.0.0`,
+适配无头服务器;默认监控本机 8080 的 SGLang,自动探测引擎;SGLang 需
+`--enable-metrics` 启动。如需仅本机访问,配置里把 `server.host` 改回
+`127.0.0.1`)。
 
 ## License
 

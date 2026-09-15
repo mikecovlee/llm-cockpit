@@ -62,7 +62,7 @@ const chatBase: ChatConfig = {
   apiKey: config.chat?.api_key ?? null,
 };
 const serverCfg = {
-  host: config.server?.host ?? "127.0.0.1",
+  host: config.server?.host ?? "0.0.0.0",
   port: config.server?.port ?? 7777,
   pollIntervalS: Math.max(1, config.server?.poll_interval_s ?? 2),
 };
