@@ -371,7 +371,9 @@ const server = serve({
     }
 
     if (u.pathname === "/" || u.pathname === "/index.html") {
-      return new Response(indexHtml, { headers: { "content-type": "text/html; charset=utf-8" } });
+      return new Response(indexHtml, {
+        headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" },
+      });
     }
 
     if (u.pathname.startsWith("/web/")) {
@@ -383,7 +385,10 @@ const server = serve({
       if (existsSync(file)) {
         const ext = rel.slice(rel.lastIndexOf(".") + 1);
         return new Response(Bun.file(file), {
-          headers: { "content-type": MIME[ext] ?? "application/octet-stream" },
+          headers: {
+            "content-type": MIME[ext] ?? "application/octet-stream",
+            "cache-control": "no-store",
+          },
         });
       }
       return new Response("not found", { status: 404 });

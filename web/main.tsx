@@ -122,6 +122,11 @@ const fmtTok = (v: number | null): string => {
 
 const fmtTime = (ts: number): string => new Date(ts).toLocaleTimeString("en-GB", { hour12: false });
 
+const uid = (): string =>
+  typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+    ? crypto.randomUUID()
+    : `id-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+
 /* ---------- echarts line chart ---------- */
 
 interface Series {
@@ -309,7 +314,7 @@ function Chat() {
               url = canvas.toDataURL("image/jpeg", 0.85);
             }
           }
-          setPendingImages((prev) => [...prev, { id: crypto.randomUUID(), url }].slice(0, 4));
+          setPendingImages((prev) => [...prev, { id: uid(), url }].slice(0, 4));
         };
         img.onerror = (): void => {
           setAttachError(`${file.name} could not be decoded — skipped.`);
@@ -374,12 +379,12 @@ function Chat() {
     setMsgs([
       ...msgs,
       {
-        id: crypto.randomUUID(),
+        id: uid(),
         role: "user",
         content: text,
         images: pendingImages.length > 0 ? [...pendingImages] : undefined,
       },
-      { id: crypto.randomUUID(), role: "assistant", content: "", streaming: true },
+      { id: uid(), role: "assistant", content: "", streaming: true },
     ]);
     setInput("");
     setPendingImages([]);
