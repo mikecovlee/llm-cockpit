@@ -1,7 +1,8 @@
 # llm-cockpit — every toolchain step runs inside a container; the host stays clean.
 # node_modules lives in the named docker volume `cockpit_mod`; build output in
-# `cockpit_dist`. `make binary` exports to ../llm-cockpit-out. Nothing lands in
-# the repo working tree.
+# `cockpit_dist`. `make binary` exports to ../cockpit-dist. Nothing lands in
+# the repo working tree except the two empty volume-mountpoint stubs (make fixup
+# hands their ownership back to you).
 
 IMG    ?= oven/bun:1.4.2
 VOLUME ?= cockpit_mod
@@ -42,4 +43,4 @@ binary:
 # docker creates root-owned mountpoint stubs for the named volumes inside the
 # working tree; hand them to the invoking user (run when no container is up)
 fixup:
-	docker run --rm -e PUID=$(IDU) -e PGID=$(IDG) -v $(ROOT):/work $(IMG) sh -c 'chown $(IDU):$(IDG) /work/dist /work/node_modules 2>/dev/null || true'
+	docker run --rm -e PUID=$(IDU) -e PGID=$(IDG) -v $(ROOT):/work $(IMG) sh -c 'chown $(IDU):$(IDG) /work/dist /work/node_modules /work/bun.lock 2>/dev/null || true'
