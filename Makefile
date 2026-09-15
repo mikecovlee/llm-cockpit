@@ -9,6 +9,9 @@ VOLUME ?= cockpit_mod
 DISTV  ?= cockpit_dist
 IDU    := $(shell id -u)
 IDG    := $(shell id -g)
+# pass the GPUs through when the host has the nvidia container runtime; the
+# toolkit injects nvidia-smi into the container so the GPU panel lights up
+GPUFLAG := $(shell docker info -f '{{json .Runtimes}}' 2>/dev/null | grep -q nvidia && echo --gpus=all)
 ROOT   := $(abspath .)
 OUT    ?= $(ROOT)-dist
 RUN    := docker run --rm -v $(ROOT):/work -v $(VOLUME):/work/node_modules -w /work
@@ -31,7 +34,7 @@ lint:
 	$(RUN) $(IMG) bunx biome check .
 
 run:
-	$(RUN) --network host -v $(DISTV):/work/dist $(IMG) sh -c "bun install && bun run scripts/build.ts && bun run src/server.ts"
+	$(RUN) --network host $(GPUFLAG) -v $(DISTV):/work/dist $(IMG) sh -c "bun install && bun run scripts/build.ts && bun run src/server.ts"
 
 image:
 	docker build -t llm-cockpit:dev .

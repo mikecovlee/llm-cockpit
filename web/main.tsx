@@ -70,6 +70,22 @@ interface Snapshot {
   capabilities: Record<string, boolean>;
 }
 
+interface GpuRow {
+  index: number;
+  name: string;
+  utilPct: number | null;
+  memUsedMb: number | null;
+  memTotalMb: number | null;
+  tempC: number | null;
+  powerW: number | null;
+  powerLimitW: number | null;
+}
+
+interface GpuState {
+  available: boolean;
+  gpus: GpuRow[];
+}
+
 interface Target {
   id: string;
   url: string;
@@ -664,6 +680,83 @@ function Chat() {
   );
 }
 
+function Spark({ a, b }: { a: (number | null)[]; b: (number | null)[] }) {
+  const pts = (arr: (number | null)[]): string => {
+    const n = Math.max(2, arr.length);
+    return arr
+      .flatMap((v, i) =>
+        v === null
+          ? []
+          : [
+              `${((i / (n - 1)) * 100).toFixed(1)},${(40 - (Math.min(100, Math.max(0, v)) / 100) * 36 - 2).toFixed(1)}`,
+            ],
+      )
+      .join(" ");
+  };
+  if (a.length < 2) return <div className="spark-empty" />;
+  return (
+    <svg className="spark" viewBox="0 0 100 40" preserveAspectRatio="none">
+      <polyline
+        points={pts(a)}
+        fill="none"
+        stroke="#38bdf8"
+        strokeWidth="1.5"
+        vectorEffect="non-scaling-stroke"
+      />
+      <polyline
+        points={pts(b)}
+        fill="none"
+        stroke="#a78bfa"
+        strokeWidth="1.5"
+        vectorEffect="non-scaling-stroke"
+      />
+    </svg>
+  );
+}
+
+interface GpuSeries {
+  util: (number | null)[];
+  mem: (number | null)[];
+}
+
+function GpuCard({ gpu, hist }: { gpu: GpuState; hist: Record<number, GpuSeries> }) {
+  return (
+    <Card title={`gpu × ${gpu.gpus.length}`}>
+      {gpu.gpus.map((g) => {
+        const memPct =
+          g.memUsedMb !== null && g.memTotalMb !== null && g.memTotalMb > 0
+            ? (g.memUsedMb / g.memTotalMb) * 100
+            : null;
+        return (
+          <div key={g.index} className="gpu-row">
+            <Row
+              label={`GPU ${g.index}${g.name === "" ? "" : ` · ${g.name}`}`}
+              value={g.utilPct === null ? "—" : `${g.utilPct}% util`}
+            />
+            <div className="bar">
+              <div style={{ width: `${Math.min(100, g.utilPct ?? 0).toFixed(0)}%` }} />
+            </div>
+            <Row
+              label="memory"
+              value={
+                g.memUsedMb !== null && g.memTotalMb !== null
+                  ? `${(g.memUsedMb / 1024).toFixed(1)} / ${(g.memTotalMb / 1024).toFixed(1)} GB`
+                  : "—"
+              }
+            />
+            <Row
+              label="temp · power"
+              value={`${g.tempC === null ? "—" : `${g.tempC}°C`} · ${g.powerW === null ? "—" : `${g.powerW.toFixed(0)}W`}`}
+            />
+            <Spark a={hist[g.index]?.util ?? []} b={hist[g.index]?.mem ?? []} />
+            <div className="spark-cap">util · mem %</div>
+          </div>
+        );
+      })}
+    </Card>
+  );
+}
+
 /* ---------- app ---------- */
 
 function App() {
@@ -671,6 +764,8 @@ function App() {
   const [sel, setSel] = React.useState<string | null>(null);
   const [snap, setSnap] = React.useState<Snapshot | null>(null);
   const [history, setHistory] = React.useState<ChartPoint[]>([]);
+  const [gpu, setGpu] = React.useState<GpuState | null>(null);
+  const [gpuHist, setGpuHist] = React.useState<Record<number, GpuSeries>>({});
   const [err, setErr] = React.useState<string | null>(null);
   const [booted, setBooted] = React.useState(false);
   const [view, setView] = React.useState<"monitor" | "chat">("monitor");
@@ -696,17 +791,40 @@ function App() {
     let stop = false;
     const tick = async (): Promise<void> => {
       try {
-        const [s, h] = await Promise.all([
+        const [s, h, gp] = await Promise.all([
           fetch(`/api/snapshot?target=${encodeURIComponent(sel)}`).then(
             (r) => r.json() as Promise<{ snapshot: Snapshot | null }>,
           ),
           fetch(`/api/history?target=${encodeURIComponent(sel)}&sec=900&compact=1`).then(
             (r) => r.json() as Promise<{ points: ChartPoint[] }>,
           ),
+          fetch("/api/gpu")
+            .then((r) => (r.ok ? (r.json() as Promise<GpuState>) : null))
+            .catch(() => null),
         ]);
         if (stop) return;
         setSnap(s.snapshot);
         setHistory(h.points);
+        if (gp !== null) {
+          setGpu(gp);
+          if (gp.available) {
+            setGpuHist((prev) => {
+              const out: Record<number, GpuSeries> = { ...prev };
+              for (const g of gp.gpus) {
+                const memPct =
+                  g.memUsedMb !== null && g.memTotalMb !== null && g.memTotalMb > 0
+                    ? (g.memUsedMb / g.memTotalMb) * 100
+                    : null;
+                const series = out[g.index] ?? { util: [], mem: [] };
+                out[g.index] = {
+                  util: [...series.util, g.utilPct].slice(-450),
+                  mem: [...series.mem, memPct].slice(-450),
+                };
+              }
+              return out;
+            });
+          }
+        }
         setErr(null);
       } catch {
         if (!stop) setErr("cannot reach llm-cockpit API");
@@ -1012,7 +1130,7 @@ function App() {
             </Card>
           </section>
 
-          <section className="grid4">
+          <section className="grid5">
             <Card title="tokens (cumulative)">
               <Row label="prompt" value={fmtTok(snap?.tokens.promptTotal ?? null)} />
               <Row label="generation" value={fmtTok(snap?.tokens.generationTotal ?? null)} />
@@ -1069,6 +1187,7 @@ function App() {
               <Row label="probe rtt" value={`${snap?.engine.rttMs ?? 0}ms`} />
               <Row label="url" value={target?.url ?? "—"} />
             </Card>
+            {gpu !== null && gpu.available ? <GpuCard gpu={gpu} hist={gpuHist} /> : null}
           </section>
         </>
       </div>

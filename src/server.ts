@@ -18,7 +18,7 @@ import {
 import { fetchText } from "./adapters/http.ts";
 import { autoDetect, builtins } from "./adapters/index.ts";
 import type { EngineAdapter } from "./adapters/types.ts";
-import { chatStream, listModels } from "./chat/openai.ts";
+import { type ChatConfig, chatStream, listModels } from "./chat/openai.ts";
 import {
   type ChatProviderSpec,
   pickProvider,
@@ -26,6 +26,7 @@ import {
   resolveChatProviders,
 } from "./chat/providers.ts";
 import { deriveRates, histogramToQuantiles } from "./core/derive.ts";
+import { type GpuSample, sampleGpu } from "./core/gpu.ts";
 import { withSseKeepalive } from "./core/keepalive.ts";
 import type { HistogramBuckets, Snapshot } from "./core/model.ts";
 import { findHistogram, findSeries, parsePrometheus } from "./core/prom.ts";
@@ -45,6 +46,7 @@ interface AppConfig {
   chat?: { providers?: ChatProviderSpec[] };
   custom?: CustomAdapterSpec[];
   server?: { host?: string; port?: number; poll_interval_s?: number };
+  gpu?: { enabled?: boolean };
 }
 
 function loadConfig(): AppConfig {
@@ -162,6 +164,15 @@ if (targets.length === 0) {
 
 const startedAt = Date.now();
 
+const gpuCfg = config.gpu?.enabled ?? null;
+let gpuState: { available: boolean; gpus: GpuSample[] } = { available: false, gpus: [] };
+
+async function refreshGpu(): Promise<void> {
+  if (gpuCfg === false) return;
+  const g = await sampleGpu();
+  gpuState = g === null ? { available: false, gpus: [] } : { available: true, gpus: g };
+}
+
 async function refresh(t: Target, adapter: EngineAdapter, ring: Ring, ts: number): Promise<void> {
   const snap = await adapter.sample(t.url, ts);
   const prev = ring.latest();
@@ -174,7 +185,10 @@ async function refresh(t: Target, adapter: EngineAdapter, ring: Ring, ts: number
 
 async function refreshAll(): Promise<void> {
   const ts = Date.now();
-  await Promise.all(targets.map((t, i) => refresh(t, adapters[i]!, rings[i]!, ts)));
+  await Promise.all([
+    ...targets.map((t, i) => refresh(t, adapters[i]!, rings[i]!, ts)),
+    refreshGpu(),
+  ]);
 }
 
 let timer: ReturnType<typeof setTimeout> | null = null;
@@ -391,6 +405,10 @@ const server = serve({
       return jsonResponse({ targets });
     }
 
+    if (u.pathname === "/api/gpu") {
+      return encodedResponse(req, JSON.stringify(gpuState), "application/json; charset=utf-8");
+    }
+
     if (u.pathname === "/api/snapshot") {
       const i = targetIndex(u.searchParams.get("target"));
       if (i < 0)
@@ -572,6 +590,11 @@ console.log(
   `[llm-cockpit] chat providers: ${chatProviders
     .map((p) => `${p.id}${p.isDefault ? " (default)" : ""}`)
     .join(", ")}`,
+);
+console.log(
+  gpuState.available
+    ? `[llm-cockpit] gpu: ${String(gpuState.gpus.length)} device(s) via nvidia-smi`
+    : "[llm-cockpit] gpu: nvidia-smi unavailable — GPU card hidden",
 );
 
 process.on("SIGTERM", () => {

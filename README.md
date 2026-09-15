@@ -41,6 +41,13 @@ exposes (null = engine doesn't report it).
 - **latency** — TTFT / E2E / TPOT / queue-wait p50/p90/p99 derived from histograms
 - **tokens / faults / extras / engine** — cumulative counters, retractions,
   engine-specific values (e.g. mamba occupancy, hicache load-back tokens)
+- **GPU** (auto-detected, Linux): per-device utilization, memory, temperature,
+  power with a since-page-load sparkline. In docker, pass `--gpus all` (the
+  `make` targets do this automatically when the host has the NVIDIA container
+  runtime); without nvidia-smi access the card simply doesn't render.
+
+Optional engine-side flags light up extra rows (no cockpit config needed):
+SGLang `--enable-mfu-metrics` adds estimated TFLOPS / memory-bandwidth.
 
 Polling is every 2 s against the server's in-memory ring (15 min window).
 
@@ -169,6 +176,9 @@ llm-cockpit 是一个多引擎推理控制台:一个进程里同时提供**实�
 - **规范模型**:所有引擎的指标被归一化为同一套结构(请求数、吞吐、KV 缓存、
   延迟直方图 p50/p90/p99、故障计数、extras),UI 只渲染引擎真实上报的字段
   (能力驱动,缺失即隐藏)。
+- **GPU 面板**(自动探测):利用率、显存、温度、功耗 + 页面存续期迷你曲线;
+  docker 部署时 `--gpus all` 即可(`make` 目标在宿主机具备 NVIDIA 容器运行时
+  时自动附加),无 nvidia-smi 时整卡隐藏。
 - **对话窗口**:可配置**多个 provider**(`chat.providers`,如下拉中的
   "DeepSeek · deepseek-flash";监控后端天然是默认 provider,api_key 只留在
   服务端),代理到任意 OpenAI-compatible API,支持 SSE 流式、reasoning
