@@ -24,10 +24,14 @@ targets:
 ```
 
 Without `custom`, each target is auto-detected: SGLang (answers
-`/get_server_info`), then vLLM (answers `/version`). Detection runs once at
+`/server_info`), then vLLM (answers `/version`). Detection runs once at
 startup. A target whose `url` is missing/not a string is skipped with an error
 log; an unreachable target keeps its card visible but reports
 `engine.healthy: false`.
+
+> SGLang's older `/get_server_info` alias is deprecated upstream (and removed
+> in some gateways); llm-cockpit speaks `/server_info`, so SGLang builds from
+> before that endpoint existed are not supported.
 
 The history ring is always `poll_interval_s` × 450 samples (≈15 min at the
 default). `GET /api/history?sec=` accepts 5…1800 seconds; `&compact=1`

@@ -15,7 +15,7 @@ const meta = {
 
 const s = normalizeSglang(p, meta, 1700000000000);
 
-test("engine meta from /get_server_info", () => {
+test("engine meta from /server_info", () => {
   expect(s.engine.adapter).toBe("sglang");
   expect(s.engine.healthy).toBe(true);
   expect(s.engine.model).toBe("/models/Qwen3.8-27B-NVFP4");

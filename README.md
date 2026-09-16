@@ -71,7 +71,7 @@ Requirements: any inference engine exposing Prometheus metrics at `/metrics`
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 Zero-config: monitors `http://127.0.0.1:8080` with the engine auto-detected
-(SGLang `/get_server_info`, vLLM `/version`); chat defaults to that same engine's
+(SGLang `/server_info`, vLLM `/version`); chat defaults to that same engine's
 `/v1`. Multiple targets, chat providers, custom adapters and the bind address
 come from `cockpit.config.yaml` (copy `cockpit.config.example.yaml`).
 

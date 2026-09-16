@@ -23,7 +23,7 @@ beforeAll(async () => {
     port: ENGINE_PORT,
     fetch(req) {
       const u = new URL(req.url);
-      if (u.pathname === "/get_server_info") return new Response(serverInfo);
+      if (u.pathname === "/server_info") return new Response(serverInfo);
       if (u.pathname === "/health") return new Response("ok");
       if (u.pathname === "/metrics") return new Response(metrics);
       if (u.pathname === "/v1/models") {

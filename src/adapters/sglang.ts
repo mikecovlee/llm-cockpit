@@ -1,4 +1,4 @@
-/** SGLang adapter: /metrics (Prometheus) + /get_server_info + /health. */
+/** SGLang adapter: /metrics (Prometheus) + /server_info + /health. */
 
 import { emptySnapshot, type HistogramBuckets, type Snapshot } from "../core/model.ts";
 import {
@@ -106,7 +106,7 @@ export function normalizeSglang(p: Parsed, meta: AdapterMeta, ts: number): Snaps
 }
 
 async function serverInfo(url: string): Promise<AdapterMeta> {
-  const r = await fetchText(`${stripSlashes(url)}/get_server_info`);
+  const r = await fetchText(`${stripSlashes(url)}/server_info`);
   if (!r.ok) return { model: null, version: null };
   try {
     const j = JSON.parse(r.text) as Record<string, unknown>;
@@ -123,7 +123,7 @@ export const sglang: EngineAdapter = {
   id: "sglang",
 
   async detect(url: string) {
-    const r = await fetchText(`${stripSlashes(url)}/get_server_info`);
+    const r = await fetchText(`${stripSlashes(url)}/server_info`);
     if (!r.ok) return null;
     try {
       JSON.parse(r.text);
