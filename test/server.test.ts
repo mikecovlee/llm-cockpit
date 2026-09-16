@@ -186,3 +186,41 @@ test("static page: html + no-store; unknown api 404", async () => {
   expect(page.headers.get("cache-control")).toContain("no-store");
   expect((await fetch(`${BASE}/api/nope`)).status).toBe(404);
 });
+
+test("server still boots when configured targets are unusable", async () => {
+  const port = 17789;
+  const dir = mkdtempSync(join(tmpdir(), "cockpit-empty-"));
+  const cfg = join(dir, "cockpit.config.yaml");
+  writeFileSync(cfg, ["server:", "  host: 127.0.0.1", `  port: ${port}`].join("\n"));
+
+  const empty = Bun.spawn([process.execPath, "run", "src/server.ts"], {
+    cwd: process.cwd(),
+    env: { ...process.env, COCKPIT_CONFIG: cfg },
+    stdout: "ignore",
+    stderr: "ignore",
+  });
+
+  try {
+    for (let i = 0; i < 80; i++) {
+      try {
+        const r = await fetch(`http://127.0.0.1:${port}/api/health`);
+        if (r.ok) {
+          expect(await r.json()).toMatchObject({ ok: true, targets: 0 });
+          const targetsResponse = await fetch(`http://127.0.0.1:${port}/api/targets`);
+          expect(targetsResponse.ok).toBe(true);
+          const targets = (await targetsResponse.json()) as {
+            targets: unknown[];
+          };
+          expect(targets.targets).toEqual([]);
+          return;
+        }
+      } catch {
+        // not up yet
+      }
+      await Bun.sleep(250);
+    }
+    throw new Error("cockpit server did not start without usable targets");
+  } finally {
+    empty.kill(9);
+  }
+});
