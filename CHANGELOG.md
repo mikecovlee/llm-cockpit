@@ -5,6 +5,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); thi
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-09-18
+
 ### Fixed
 - SGLang adapter now queries `/server_info` instead of the upstream-deprecated
   `/get_server_info` (deprecated alias already removed in some gateway
