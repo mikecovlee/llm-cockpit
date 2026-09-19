@@ -5,6 +5,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); thi
 
 ## [Unreleased]
 
+### Fixed
+- Monitor: the second card row used a fixed 5-column grid, so after the extras
+  card became capability-driven (hidden without extras) the row showed 4 cards
+  and an empty fifth column. It is now `auto-fit` — any card count (3 with no
+  GPU, 4 typical, 5 with extras) divides the width evenly.
+
 ## [0.3.0] - 2026-09-19
 
 ### Added
