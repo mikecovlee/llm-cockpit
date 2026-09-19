@@ -245,18 +245,13 @@ function toChartPoint(s: Snapshot) {
     requests: {
       running: s.requests.running,
       queued: s.requests.queued,
-      paused: s.requests.paused,
-      swapped: s.requests.swapped,
     },
     throughput: {
       generationTps: s.throughput.generationTps,
       prefillTps: s.throughput.prefillTps,
-      prefillEffectiveTps: s.throughput.prefillEffectiveTps,
     },
     cache: {
       kvUsagePct: s.cache.kvUsagePct,
-      hostUsedTokens: s.cache.hostUsedTokens,
-      hostTotalTokens: s.cache.hostTotalTokens,
     },
     latency: { ttft: tripleOf(s.latency.ttft) },
   };

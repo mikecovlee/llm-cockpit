@@ -731,3 +731,9 @@ sglang:num_requests_total{engine_type="unified",is_streaming="true",model_name="
 # TYPE sglang:cached_tokens_total counter
 sglang:cached_tokens_total{cache_source="device",engine_type="unified",model_name="qwen3.8-27b"} 1.279936e+07
 sglang:cached_tokens_total{cache_source="host",engine_type="unified",model_name="qwen3.8-27b"} 750720.0
+# HELP sglang:utilization The utilization.
+# TYPE sglang:utilization gauge
+sglang:utilization{engine_type="unified",model_name="qwen3.8-27b",moe_ep_rank="0",pp_rank="0",tp_rank="0"} 0.0
+# HELP sglang:num_aborted_requests_total Number of requests aborted.
+# TYPE sglang:num_aborted_requests_total counter
+sglang:num_aborted_requests_total{engine_type="unified",model_name="qwen3.8-27b"} 2.0

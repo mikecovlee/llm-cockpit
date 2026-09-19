@@ -25,6 +25,7 @@ test("engine meta from /server_info", () => {
 test("requests & throughput normalized", () => {
   expect(s.requests.running).toBeGreaterThanOrEqual(0);
   expect(typeof s.requests.queued).toBe("number");
+  expect(s.requests.utilization).toBe(0);
   expect(s.throughput.generationTps).toBeGreaterThanOrEqual(0);
 });
 
@@ -35,19 +36,16 @@ test("token counters + completed count", () => {
   expect(s.counts.requestsCompletedTotal).toBeGreaterThanOrEqual(0);
 });
 
-test("KV cache + hicache tier normalized", () => {
+test("KV cache normalized", () => {
   expect(s.cache.kvUsedTokens).not.toBeNull();
   expect(s.cache.kvTotalTokens).not.toBeNull();
   expect(s.cache.kvUsagePct).not.toBeNull();
-  expect(s.cache.hostUsedTokens).not.toBeNull();
-  expect(s.cache.hostTotalTokens).not.toBeNull();
-  expect(s.capabilities.hicache).toBe(true);
+  expect(s.cache.evictedTokensTotal).toBeCloseTo(1.436342e6, 1);
 });
 
-test("fault counters + mamba capability + extras", () => {
+test("fault counters normalized", () => {
   expect(s.faults.retractedTotal).not.toBeNull();
-  expect(s.capabilities.mamba).toBe(true);
-  expect(s.extras["mambaUsage"]).not.toBeNull();
+  expect(s.faults.abortedTotal).toBe(2);
 });
 
 test("latency histograms present with counts", () => {
@@ -57,28 +55,9 @@ test("latency histograms present with counts", () => {
   expect(s.latency.ttft!.sum).toBeGreaterThan(0);
 });
 
-test("availability + prefill effective mode split", () => {
-  expect(s.cache.kvAvailableTokens).toBe(484.0);
-  expect(s.extras["mambaAvailableTokens"]).toBe(4.0);
-  expect(s.throughput.prefillEffectiveTotal).toBeCloseTo(1.579245e6 + 1.279936e7 + 750720.0, 3);
-  expect(s.cache.deviceHitTotal).toBe(1.279936e7);
-  expect(s.cache.hostHitTotal).toBe(750720.0);
-  expect(s.cache.storageHitTotal).toBe(0.0);
-  expect(s.capabilities.specDecode).toBe(false);
-  expect(s.extras["specAcceptRate"]).toBeUndefined();
-});
-
-test("spec decode extras appear only when active", () => {
-  const p2 = parsePrometheus(
-    [
-      'sglang:spec_accept_rate{model_name="m"} 0.82',
-      'sglang:spec_accept_length{model_name="m"} 2.5',
-      "sglang:estimated_flops_per_gpu_total 4e12",
-    ].join("\n"),
-  );
-  const s2 = normalizeSglang(p2, { model: null, version: null }, 1);
-  expect(s2.capabilities.specDecode).toBe(true);
-  expect(s2.extras["specAcceptRate"]).toBe(0.82);
-  expect(s2.extras["specAcceptLength"]).toBe(2.5);
-  expect(s2.extras["mfuFlopsTotal"]).toBe(4e12);
+test("engine-specific metrics stay out of the canonical model", () => {
+  // The fixture carries mamba / hicache / spec-decode / prefill-effective /
+  // kv-available lines; the generic model must not leak any of them.
+  expect(s.extras).toEqual({});
+  expect(s.capabilities).toEqual({ prefixCache: true });
 });

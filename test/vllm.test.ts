@@ -15,7 +15,6 @@ test("vllm core gauges", () => {
   expect(s.engine.healthy).toBe(true);
   expect(s.requests.running).toBe(3);
   expect(s.requests.queued).toBe(1);
-  expect(s.requests.swapped).toBe(0);
   expect(s.faults.preemptedTotal).toBe(2);
 });
 

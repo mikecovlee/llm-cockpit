@@ -103,19 +103,21 @@ test("snapshot is normalized from fixture metrics", async () => {
   const s = (await (await fetch(`${BASE}/api/snapshot`)).json()) as {
     snapshot: {
       tokens: { promptTotal: number | null };
+      requests: { utilization: number | null };
       cache: {
         kvUsagePct: number | null;
-        kvAvailableTokens: number | null;
-        deviceHitTotal: number | null;
+        evictedTokensTotal: number | null;
         cumulativeHitRate: number | null;
       };
+      faults: { abortedTotal: number | null };
       engine: { healthy: boolean };
     };
   };
   expect(s.snapshot.engine.healthy).toBe(true);
   expect(s.snapshot.tokens.promptTotal).not.toBeNull();
-  expect(s.snapshot.cache.kvAvailableTokens).toBe(484);
-  expect(s.snapshot.cache.deviceHitTotal).toBe(1.279936e7);
+  expect(s.snapshot.requests.utilization).toBe(0);
+  expect(s.snapshot.cache.evictedTokensTotal).toBe(1.436342e6);
+  expect(s.snapshot.faults.abortedTotal).toBe(2);
   expect(s.snapshot.cache.cumulativeHitRate).not.toBeNull();
 });
 

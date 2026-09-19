@@ -34,8 +34,7 @@ export const en = {
   "requests.title": "requests",
   "requests.running": "running",
   "requests.queued": "queued",
-  "requests.paused": "paused",
-  "requests.swapped": "swapped",
+  "requests.utilization": "scheduler util",
 
   /* ---------- throughput card ---------- */
   "throughput.title": "throughput",
@@ -43,22 +42,16 @@ export const en = {
   "throughput.prefill": "prefill",
   "throughput.tokPerSec": "tok/s",
   "throughput.rps": "requests",
-  "throughput.estCompute": "est. compute (all GPUs)",
-  "throughput.estMemBw": "est. mem bandwidth",
   "throughput.seriesGen": "generation tok/s",
   "throughput.seriesPrefill": "prefill tok/s",
-  "throughput.seriesPrefillEff": "prefill effective tok/s",
 
   /* ---------- kv cache card ---------- */
   "kv.title": "kv cache",
   "kv.empty": "no kv data",
   "kv.usedTotal": "used / total",
   "kv.hitRate": "cache hit rate",
-  "kv.available": "KV available",
-  "kv.hits": "hits dev/host/storage tok/s",
-  "kv.hostTier": "host tier (L2)",
+  "kv.evicted": "evicted tokens",
   "kv.seriesUsage": "kv usage %",
-  "kv.seriesHostTier": "host tier %",
 
   /* ---------- latency card ---------- */
   "latency.title": "latency (s)",
@@ -82,16 +75,11 @@ export const en = {
   "faults.title": "faults",
   "faults.retracted": "retracted",
   "faults.preempted": "preempted",
+  "faults.aborted": "aborted",
   "faults.caption": "cumulative since engine start",
 
   /* ---------- extras card ---------- */
   "extras.title": "extras",
-  "extras.mambaOccupancy": "mamba occupancy",
-  "extras.hicacheLoadBack": "hicache load-back tokens",
-  "extras.fwdOccupancy": "forward occupancy",
-  "extras.mambaSlots": "mamba slots available",
-  "extras.specAccept": "spec accept rate / len",
-  "extras.empty": "no data",
 
   /* ---------- engine card ---------- */
   "engine.title": "engine",
@@ -181,8 +169,7 @@ export const zh: Record<LangKey, string> = {
   "requests.title": "请求",
   "requests.running": "运行中",
   "requests.queued": "排队中",
-  "requests.paused": "已暂停",
-  "requests.swapped": "已换出",
+  "requests.utilization": "调度利用率",
 
   /* ---------- throughput card ---------- */
   "throughput.title": "吞吐",
@@ -190,22 +177,16 @@ export const zh: Record<LangKey, string> = {
   "throughput.prefill": "预填充",
   "throughput.tokPerSec": "tok/s",
   "throughput.rps": "请求",
-  "throughput.estCompute": "估算算力（全部 GPU）",
-  "throughput.estMemBw": "估算内存带宽",
   "throughput.seriesGen": "生成 tok/s",
   "throughput.seriesPrefill": "预填充 tok/s",
-  "throughput.seriesPrefillEff": "预填充有效 tok/s",
 
   /* ---------- kv cache card ---------- */
   "kv.title": "KV Cache",
   "kv.empty": "无 KV 数据",
   "kv.usedTotal": "已用 / 总量",
   "kv.hitRate": "缓存命中率",
-  "kv.available": "KV 可用",
-  "kv.hits": "dev/host/storage 命中 tok/s",
-  "kv.hostTier": "主机层 (L2)",
+  "kv.evicted": "已驱逐 tokens",
   "kv.seriesUsage": "KV 使用率 %",
-  "kv.seriesHostTier": "主机层 %",
 
   /* ---------- latency card ---------- */
   "latency.title": "延迟 (s)",
@@ -229,16 +210,11 @@ export const zh: Record<LangKey, string> = {
   "faults.title": "故障",
   "faults.retracted": "已撤回",
   "faults.preempted": "被抢占",
+  "faults.aborted": "中止",
   "faults.caption": "引擎启动以来累计",
 
   /* ---------- extras card ---------- */
   "extras.title": "扩展指标",
-  "extras.mambaOccupancy": "Mamba 占用率",
-  "extras.hicacheLoadBack": "HiCache 回读 Token",
-  "extras.fwdOccupancy": "前向占用率",
-  "extras.mambaSlots": "可用 Mamba 槽",
-  "extras.specAccept": "投机接受率 / 长度",
-  "extras.empty": "无数据",
 
   /* ---------- engine card ---------- */
   "engine.title": "引擎",

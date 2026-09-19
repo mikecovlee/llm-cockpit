@@ -80,13 +80,13 @@ come from `cockpit.config.yaml` (copy `cockpit.config.example.yaml`).
 Capability-driven: every card and chart renders only what the engine actually
 exposes (null = engine doesn't report it).
 
-- **requests** — running / queued / paused / swapped, live sparkline
+- **requests** — running / queued / scheduler utilization, live sparkline
 - **throughput** — generation (and prefill) tok/s
-- **KV cache** — usage %, used/total tokens, cache hit rate, host-tier (L2/hicache)
-  usage when the engine runs a host KV tier
+- **KV cache** — usage %, used/total tokens, cache hit rate, evicted tokens
 - **latency** — TTFT / E2E / TPOT / queue-wait p50/p90/p99 derived from histograms
-- **tokens / faults / extras / engine** — cumulative counters, retractions,
-  engine-specific values (e.g. mamba occupancy, hicache load-back tokens)
+- **tokens / faults / engine** — cumulative counters, retractions / preemptions /
+  aborts; **extras** renders any additional engine-specific values generically
+  (one row per key, capability-driven)
 - **GPU** (auto-detected, Linux): per-device utilization, memory, temperature,
   power with a since-page-load sparkline. In docker, pass `--gpus all` (the
   `make` targets do this automatically when the host has the NVIDIA container
@@ -169,8 +169,8 @@ metrics are missing): `POST /api/validate-mapping`.
 | `POST /api/chat/stream?provider=id` | SSE proxy → OpenAI `chat/completions` (stream, ≤12 MB body) |
 
 All numeric fields in the canonical model are nullable — the shape is stable
-across engines; capabilities (`mamba`, `hicache`, `prefixCache`) tell the UI
-what exists.
+across engines; `capabilities.prefixCache` tells the UI whether hit-rate
+accounting exists.
 
 ## Layout
 

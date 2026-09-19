@@ -45,7 +45,6 @@ export function normalizeVllm(p: Parsed, meta: AdapterMeta, ts: number): Snapsho
 
   s.requests.running = gauge(p, "num_requests_running");
   s.requests.queued = gauge(p, "num_requests_waiting");
-  s.requests.swapped = gauge(p, "num_requests_swapped");
   s.faults.preemptedTotal = counter(p, "num_preemptions_total");
 
   s.cache.kvUsagePct = gaugeAlt(p, "kv_cache_usage_perc", "gpu_cache_usage_perc");

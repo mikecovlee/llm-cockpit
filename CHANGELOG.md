@@ -5,6 +5,28 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); thi
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-09-19
+
+### Added
+- Requests card: scheduler utilization stat (SGLang v0.5.20+ `utilization`).
+- KV card: cumulative evicted tokens row (`evicted_tokens_total`).
+- Faults card: aborted requests stat (`num_aborted_requests_total`).
+- The extras card now renders **any** `extras` keys generically (one row per
+  key) instead of six hardcoded engine-specific fields — the custom adapter's
+  `extras.<name>` mapping is now visible in the UI end to end.
+
+### Changed
+- Leaner generic model: removed the engine-specific fields that only one
+  deployment could fill — `requests.{paused,swapped}`,
+  `throughput.prefillEffective{Total,Tps}`,
+  `cache.{hostUsedTokens,hostTotalTokens,kvAvailableTokens,deviceHitTotal,
+  hostHitTotal,storageHitTotal,*HitTps}` and the `capabilities` flags
+  `mamba` / `hicache` / `specDecode` (only `prefixCache` remains). This prunes
+  the `/api/snapshot` and `/api/history` wire shapes accordingly.
+- Frontend split from one 1.8k-line `main.tsx` into `types.ts` / `shared.tsx` /
+  `charts.tsx` / `chat.tsx` / `monitor.tsx` / `main.tsx` (no behavior change).
+- README monitor section, ADAPTERS/CONFIGURATION canonical field list updated.
+
 ## [0.2.1] - 2026-09-18
 
 ### Fixed

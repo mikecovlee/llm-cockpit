@@ -23,8 +23,8 @@ export interface CustomAdapterSpec {
 }
 
 const FIELD_GROUPS: Record<string, string[]> = {
-  requests: ["running", "queued", "swapped", "paused"],
-  throughput: ["generationTps", "prefillTps", "requestsPerSec", "prefillEffectiveTotal"],
+  requests: ["running", "queued", "utilization"],
+  throughput: ["generationTps", "prefillTps", "requestsPerSec"],
   tokens: ["promptTotal", "generationTotal", "cachedTotal"],
   counts: ["requestsCompletedTotal"],
   cache: [
@@ -35,14 +35,9 @@ const FIELD_GROUPS: Record<string, string[]> = {
     "prefixHitsTotal",
     "prefixQueriesTotal",
     "cumulativeHitRate",
-    "hostUsedTokens",
-    "hostTotalTokens",
-    "kvAvailableTokens",
-    "deviceHitTotal",
-    "hostHitTotal",
-    "storageHitTotal",
+    "evictedTokensTotal",
   ],
-  faults: ["retractedTotal", "preemptedTotal"],
+  faults: ["retractedTotal", "preemptedTotal", "abortedTotal"],
   latency: ["ttft", "tpot", "e2e", "queueWait"],
 };
 
@@ -172,7 +167,6 @@ export function normalizeCustom(
   }
 
   if (s.cache.prefixHitsTotal !== null) s.capabilities.prefixCache = true;
-  if (s.cache.hostTotalTokens !== null) s.capabilities.hicache = true;
   return s;
 }
 

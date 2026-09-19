@@ -5,6 +5,9 @@ import { chromium } from "playwright";
 
 const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+await page.addInitScript(() =>
+  localStorage.setItem("llm-cockpit.prefs.v1", JSON.stringify({ theme: "dark", lang: "en" })),
+);
 const errors = [];
 page.on("pageerror", (e) => errors.push(String(e)));
 page.on("console", (m) => {

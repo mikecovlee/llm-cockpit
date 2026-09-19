@@ -73,19 +73,4 @@ export function deriveRates(prev: Snapshot | null, next: Snapshot, dtMs: number)
     prev.counts.requestsCompletedTotal,
     next.counts.requestsCompletedTotal,
   );
-  next.throughput.prefillEffectiveTps = r(
-    prev.throughput.prefillEffectiveTotal,
-    next.throughput.prefillEffectiveTotal,
-  );
-  next.cache.deviceHitTps = r(prev.cache.deviceHitTotal, next.cache.deviceHitTotal);
-  next.cache.hostHitTps = r(prev.cache.hostHitTotal, next.cache.hostHitTotal);
-  next.cache.storageHitTps = r(prev.cache.storageHitTotal, next.cache.storageHitTotal);
-  const fl = r(prev.extras["mfuFlopsTotal"] ?? null, next.extras["mfuFlopsTotal"] ?? null);
-  if (fl !== null) next.extras["tflopsAllGpus"] = fl / 1e12;
-  const rd = r(prev.extras["mfuReadBytesTotal"] ?? null, next.extras["mfuReadBytesTotal"] ?? null);
-  const wr = r(
-    prev.extras["mfuWriteBytesTotal"] ?? null,
-    next.extras["mfuWriteBytesTotal"] ?? null,
-  );
-  if (rd !== null && wr !== null) next.extras["memBandwidthGbsAllGpus"] = (rd + wr) / 1e9;
 }

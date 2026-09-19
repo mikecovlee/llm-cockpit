@@ -23,10 +23,6 @@ function counter(p: Parsed, name: string): number | null {
   return sumSeries(p, `${G}${name}`) ?? sumSeries(p, `${G_ALT}${name}`);
 }
 
-function labeledCounter(p: Parsed, name: string, mode: string): number | null {
-  return sumSeries(p, `${G}${name}`, { mode }) ?? sumSeries(p, `${G_ALT}${name}`, { mode });
-}
-
 function histogram(p: Parsed, name: string): HistogramBuckets | null {
   const h = findHistogram(p, `${G}${name}`) ?? findHistogram(p, `${G_ALT}${name}`);
   if (h === null) return null;
@@ -44,7 +40,7 @@ export function normalizeSglang(p: Parsed, meta: AdapterMeta, ts: number): Snaps
   // pool-total gauges take the first series (see README limitations)
   s.requests.running = counter(p, "num_running_reqs");
   s.requests.queued = counter(p, "num_queue_reqs");
-  s.requests.paused = counter(p, "num_paused_reqs");
+  s.requests.utilization = gauge(p, "utilization");
 
   s.throughput.generationTps = counter(p, "gen_throughput");
   s.tokens.promptTotal = counter(p, "prompt_tokens_total");
@@ -56,46 +52,15 @@ export function normalizeSglang(p: Parsed, meta: AdapterMeta, ts: number): Snaps
   s.cache.kvUsedTokens = counter(p, "kv_used_tokens");
   s.cache.kvTotalTokens = gauge(p, "max_total_num_tokens");
   s.cache.hitRate = gauge(p, "cache_hit_rate");
-  s.cache.hostUsedTokens = gauge(p, "hicache_host_used_tokens");
-  s.cache.hostTotalTokens = gauge(p, "hicache_host_total_tokens");
+  s.cache.evictedTokensTotal = counter(p, "evicted_tokens_total");
+
   s.faults.retractedTotal = counter(p, "num_retracted_reqs");
-
-  s.cache.kvAvailableTokens = gauge(p, "kv_available_tokens");
-  const mambaAvail = gauge(p, "mamba_available_tokens");
-  if (mambaAvail !== null) s.extras["mambaAvailableTokens"] = mambaAvail;
-  s.throughput.prefillEffectiveTotal = counter(p, "prefill_effective_tokens_total");
-  s.cache.deviceHitTotal = labeledCounter(p, "prefill_effective_tokens_total", "device_hit");
-  s.cache.hostHitTotal = labeledCounter(p, "prefill_effective_tokens_total", "host_hit");
-  s.cache.storageHitTotal = labeledCounter(p, "prefill_effective_tokens_total", "storage_hit");
-
-  const specRate = gauge(p, "spec_accept_rate");
-  if (specRate !== null && specRate > 0) {
-    s.capabilities.specDecode = true;
-    s.extras["specAcceptRate"] = specRate;
-    const specLen = gauge(p, "spec_accept_length");
-    if (specLen !== null) s.extras["specAcceptLength"] = specLen;
-  }
-  const flops = counter(p, "estimated_flops_per_gpu_total");
-  if (flops !== null) s.extras["mfuFlopsTotal"] = flops;
-  const rBytes = counter(p, "estimated_read_bytes_per_gpu_total");
-  if (rBytes !== null) s.extras["mfuReadBytesTotal"] = rBytes;
-  const wBytes = counter(p, "estimated_write_bytes_per_gpu_total");
-  if (wBytes !== null) s.extras["mfuWriteBytesTotal"] = wBytes;
+  s.faults.abortedTotal = counter(p, "num_aborted_requests_total");
 
   s.latency.ttft = histogram(p, "time_to_first_token_seconds");
   s.latency.tpot = histogram(p, "inter_token_latency_seconds");
   s.latency.e2e = histogram(p, "e2e_request_latency_seconds");
   s.latency.queueWait = histogram(p, "queue_time_seconds");
-
-  const mamba = gauge(p, "mamba_usage");
-  if (mamba !== null) {
-    s.capabilities.mamba = true;
-    s.extras["mambaUsage"] = mamba;
-  }
-  if (s.cache.hostTotalTokens !== null) s.capabilities.hicache = true;
-
-  s.extras["loadBackTokensTotal"] = counter(p, "load_back_tokens_total");
-  s.extras["fwdOccupancy"] = gauge(p, "fwd_occupancy");
 
   if (s.tokens.cachedTotal !== null && s.tokens.promptTotal !== null && s.tokens.promptTotal > 0) {
     s.cache.cumulativeHitRate = Math.min(1, s.tokens.cachedTotal / s.tokens.promptTotal);

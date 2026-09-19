@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>LLM Cockpit</title>
     <script>
-      (function () {
+      (() => {
         var stored = null;
         try {
           stored = JSON.parse(localStorage.getItem("llm-cockpit.prefs.v1") || "null");

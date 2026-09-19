@@ -95,12 +95,12 @@ targets:
 ```
 
 Canonical field paths: `engine.{model,version}`,
-`requests.{running,queued,swapped,paused}`,
-`throughput.{generationTps,prefillTps,requestsPerSec,prefillEffectiveTotal}`,
+`requests.{running,queued,utilization}`,
+`throughput.{generationTps,prefillTps,requestsPerSec}`,
 `tokens.{promptTotal,generationTotal,cachedTotal}`,
 `counts.requestsCompletedTotal`,
-`cache.{kvUsagePct,kvUsedTokens,kvTotalTokens,hitRate,prefixHitsTotal,prefixQueriesTotal,hostUsedTokens,hostTotalTokens,kvAvailableTokens,deviceHitTotal,hostHitTotal,storageHitTotal}`,
-`faults.{retractedTotal,preemptedTotal}`, `extras.<anything>`.
+`cache.{kvUsagePct,kvUsedTokens,kvTotalTokens,hitRate,prefixHitsTotal,prefixQueriesTotal,cumulativeHitRate,evictedTokensTotal}`,
+`faults.{retractedTotal,preemptedTotal,abortedTotal}`, `extras.<anything>`.
 JSON paths support `$.a.b`, `$.a[0].b`, numeric segments as dots.
 
 Validate a mapping live without restarting:
