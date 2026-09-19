@@ -5,6 +5,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); thi
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-09-19
+
 ### Fixed
 - Monitor: the second card row used a fixed 5-column grid, so after the extras
   card became capability-driven (hidden without extras) the row showed 4 cards

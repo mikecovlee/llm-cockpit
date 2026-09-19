@@ -1,6 +1,6 @@
 {
   "name": "llm-cockpit",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Multi-engine inference console: live metrics cockpit + OpenAI-compatible chat. Adapter-driven: SGLang, vLLM, custom engines.",
   "license": "Apache-2.0",
   "keywords": [
