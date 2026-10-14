@@ -17,31 +17,29 @@ function sseChunk(obj: unknown): string {
   return `data: ${JSON.stringify(obj)}\n\n`;
 }
 
+function engineFetch(req: Request): Response {
+  const u = new URL(req.url);
+  if (u.pathname === "/server_info") return new Response(serverInfo);
+  if (u.pathname === "/health") return new Response("ok");
+  if (u.pathname === "/metrics") return new Response(metrics);
+  if (u.pathname === "/v1/models") {
+    return Response.json({ object: "list", data: [{ id: "fixture-model", object: "model" }] });
+  }
+  if (u.pathname === "/v1/chat/completions" && req.method === "POST") {
+    const body =
+      sseChunk({ choices: [{ delta: { content: "fixture reply" } }] }) +
+      sseChunk({
+        choices: [],
+        usage: { prompt_tokens: 5, completion_tokens: 3, total_tokens: 8 },
+      }) +
+      "data: [DONE]\n\n";
+    return new Response(body, { headers: { "content-type": "text/event-stream" } });
+  }
+  return new Response("not found", { status: 404 });
+}
+
 beforeAll(async () => {
-  engine = Bun.serve({
-    hostname: "127.0.0.1",
-    port: ENGINE_PORT,
-    fetch(req) {
-      const u = new URL(req.url);
-      if (u.pathname === "/server_info") return new Response(serverInfo);
-      if (u.pathname === "/health") return new Response("ok");
-      if (u.pathname === "/metrics") return new Response(metrics);
-      if (u.pathname === "/v1/models") {
-        return Response.json({ object: "list", data: [{ id: "fixture-model", object: "model" }] });
-      }
-      if (u.pathname === "/v1/chat/completions" && req.method === "POST") {
-        const body =
-          sseChunk({ choices: [{ delta: { content: "fixture reply" } }] }) +
-          sseChunk({
-            choices: [],
-            usage: { prompt_tokens: 5, completion_tokens: 3, total_tokens: 8 },
-          }) +
-          "data: [DONE]\n\n";
-        return new Response(body, { headers: { "content-type": "text/event-stream" } });
-      }
-      return new Response("not found", { status: 404 });
-    },
-  });
+  engine = Bun.serve({ hostname: "127.0.0.1", port: ENGINE_PORT, fetch: engineFetch });
 
   const dir = mkdtempSync(join(tmpdir(), "cockpit-it-"));
   const cfg = join(dir, "cockpit.config.yaml");
@@ -226,3 +224,63 @@ test("server still boots when configured targets are unusable", async () => {
     empty.kill(9);
   }
 });
+
+test("auto-detect target self-registers after the engine comes up (cold boot)", async () => {
+  const enginePort = 17796;
+  const appPort = 17790;
+  const base = `http://127.0.0.1:${appPort}`;
+
+  const dir = mkdtempSync(join(tmpdir(), "cockpit-coldboot-"));
+  const cfg = join(dir, "cockpit.config.yaml");
+  writeFileSync(
+    cfg,
+    [
+      "server:",
+      "  host: 127.0.0.1",
+      `  port: ${appPort}`,
+      "  poll_interval_s: 1",
+      "targets:",
+      `  - url: http://127.0.0.1:${enginePort}`,
+    ].join("\n"),
+  );
+
+  const cold = Bun.spawn([process.execPath, "run", "src/server.ts"], {
+    cwd: process.cwd(),
+    env: { ...process.env, COCKPIT_CONFIG: cfg },
+    stdout: "ignore",
+    stderr: "ignore",
+  });
+
+  let lateEngine: ReturnType<typeof Bun.serve> | null = null;
+  try {
+    for (let i = 0; i < 80; i++) {
+      try {
+        if ((await fetch(`${base}/api/health`)).ok) break;
+      } catch {
+        // not up yet
+      }
+      await Bun.sleep(250);
+    }
+    const health = (await (await fetch(`${base}/api/health`)).json()) as { targets: number };
+    expect(health.targets).toBe(0);
+
+    lateEngine = Bun.serve({ hostname: "127.0.0.1", port: enginePort, fetch: engineFetch });
+
+    let first: { adapter: string; status: string } | undefined;
+    for (let i = 0; i < 30; i++) {
+      const t = (await (await fetch(`${base}/api/targets`)).json()) as {
+        targets: { adapter: string; status: string }[];
+      };
+      first = t.targets[0];
+      if (first !== undefined && first.status === "online") break;
+      await Bun.sleep(1_000);
+    }
+    expect(first?.adapter).toBe("sglang");
+    expect(first?.status).toBe("online");
+  } finally {
+    cold.kill(9);
+    lateEngine?.stop(true);
+  }
+},
+20_000,
+);

@@ -102,9 +102,42 @@ const targetConfigs: TargetConfig[] =
     ? config.targets
     : [{ url: "http://127.0.0.1:8080" }];
 
+/** Auto-detect retry window for targets whose engine was not up at startup
+ * (cold boot: the engine loads weights for minutes while the server is up). */
+const DETECT_RETRY_MS = 5_000;
+const DETECT_DEADLINE_MS = 10 * 60_000;
+
 const targets: Target[] = [];
 const adapters: EngineAdapter[] = [];
 const rings: Ring[] = [];
+let pendingAutoDetect = 0;
+
+function registerTarget(t: Target, a: EngineAdapter): void {
+  targets.push(t);
+  adapters.push(a);
+  rings.push(new Ring(ringCapacity(serverCfg.pollIntervalS)));
+}
+
+async function detectWithRetry(id: string, url: string): Promise<void> {
+  const deadline = Date.now() + DETECT_DEADLINE_MS;
+  for (;;) {
+    try {
+      const a = builtins[await autoDetect(url)];
+      if (a === undefined) return;
+      registerTarget({ id, url, adapter: a.id, status: "pending", model: null, version: null }, a);
+      console.log(`[config] target '${id}' (${url}) resolved in background — adapter=${a.id}`);
+      return;
+    } catch (e) {
+      if (Date.now() >= deadline) {
+        console.error(
+          `[config] target '${id}' (${url}): ${String(e)} — skipped (engine still down after ${String(DETECT_DEADLINE_MS / 60000)} min)`,
+        );
+        return;
+      }
+      await Bun.sleep(DETECT_RETRY_MS);
+    }
+  }
+}
 
 for (let i = 0; i < targetConfigs.length; i++) {
   const tc = targetConfigs[i]!;
@@ -114,50 +147,57 @@ for (let i = 0; i < targetConfigs.length; i++) {
     continue;
   }
 
-  let adapter: EngineAdapter;
-  let adapterId: string;
   if (tc.custom !== undefined) {
     const spec = customSpecs.get(tc.custom);
     if (spec === undefined) {
       console.error(`[config] target '${id}': unknown custom adapter '${tc.custom}'`);
       process.exit(1);
     }
-    adapterId = spec.id;
-    adapter = createCustomAdapter(spec);
-  } else if (tc.adapter !== undefined) {
+    registerTarget(
+      { id, url: tc.url, adapter: spec.id, status: "pending", model: null, version: null },
+      createCustomAdapter(spec),
+    );
+    continue;
+  }
+
+  if (tc.adapter !== undefined) {
     const b = builtins[tc.adapter];
     const c = customSpecs.get(tc.adapter);
     if (b === undefined && c === undefined) {
       console.error(`[config] target '${id}': unknown adapter '${tc.adapter}'`);
       process.exit(1);
     }
-    adapterId = b !== undefined ? b.id : c!.id;
-    adapter = b !== undefined ? b : createCustomAdapter(c!);
-  } else {
-    try {
-      adapterId = await autoDetect(tc.url);
-    } catch (e) {
-      console.error(`[config] target '${id}' (${tc.url}): ${String(e)} — skipped`);
-      continue;
-    }
-    const b = builtins[adapterId];
-    if (b === undefined) continue;
-    adapter = b;
+    registerTarget(
+      {
+        id,
+        url: tc.url,
+        adapter: b !== undefined ? b.id : c!.id,
+        status: "pending",
+        model: null,
+        version: null,
+      },
+      b !== undefined ? b : createCustomAdapter(c!),
+    );
+    continue;
   }
 
-  targets.push({
-    id,
-    url: tc.url,
-    adapter: adapterId,
-    status: "pending",
-    model: null,
-    version: null,
-  });
-  adapters.push(adapter);
-  rings.push(new Ring(ringCapacity(serverCfg.pollIntervalS)));
+  try {
+    const b = builtins[await autoDetect(tc.url)];
+    if (b === undefined) continue;
+    registerTarget(
+      { id, url: tc.url, adapter: b.id, status: "pending", model: null, version: null },
+      b,
+    );
+  } catch (e) {
+    pendingAutoDetect += 1;
+    console.error(
+      `[config] target '${id}' (${tc.url}): ${String(e)} — retrying in background (every ${String(DETECT_RETRY_MS / 1000)}s, ${String(DETECT_DEADLINE_MS / 60000)} min deadline)`,
+    );
+    void detectWithRetry(id, tc.url);
+  }
 }
 
-if (targets.length === 0) {
+if (targets.length === 0 && pendingAutoDetect === 0) {
   console.warn(
     "[config] no usable targets — serving empty dashboard + chat only (add targets to cockpit.config.yaml)",
   );
@@ -576,8 +616,12 @@ const server = serve({
   },
 });
 
+const pendingNote =
+  pendingAutoDetect > 0
+    ? `; ${String(pendingAutoDetect)} target(s) pending auto-detect (retrying every ${String(DETECT_RETRY_MS / 1000)}s)`
+    : "";
 console.log(
-  `[llm-cockpit] listening on http://${serverCfg.host}:${serverCfg.port} — ${targets.length} target(s), poll every ${serverCfg.pollIntervalS}s`,
+  `[llm-cockpit] listening on http://${serverCfg.host}:${serverCfg.port} — ${targets.length} target(s), poll every ${serverCfg.pollIntervalS}s${pendingNote}`,
 );
 for (const t of targets) {
   console.log(`  - ${t.id}: ${t.url} (adapter=${t.adapter}, status=${t.status})`);
