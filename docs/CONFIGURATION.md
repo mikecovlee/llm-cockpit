@@ -24,10 +24,14 @@ targets:
 ```
 
 Without `custom`, each target is auto-detected: SGLang (answers
-`/server_info`), then vLLM (answers `/version`). Detection runs once at
-startup. A target whose `url` is missing/not a string is skipped with an error
-log; an unreachable target keeps its card visible but reports
-`engine.healthy: false`.
+`/server_info`), then vLLM (answers `/version`). Detection is attempted at
+startup; if the engine is not up yet it is retried in the background (every
+5 s, 10 min deadline) and the target is registered as soon as it appears —
+a cold boot where the engine loads weights after the server no longer drops
+the target. A target whose `url` is missing/not a string is skipped with an
+error log; an engine still down after the deadline is skipped with an error
+log. After registration, an unreachable target keeps its card visible but
+reports `engine.healthy: false`.
 
 > SGLang's older `/get_server_info` alias is deprecated upstream (and removed
 > in some gateways); llm-cockpit speaks `/server_info`, so SGLang builds from
