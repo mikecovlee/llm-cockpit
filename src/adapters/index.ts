@@ -1,10 +1,11 @@
 /** Adapter registry + auto-detection over builtin engines. */
 
+import { llamacpp } from "./llamacpp.ts";
 import { sglang } from "./sglang.ts";
 import type { EngineAdapter } from "./types.ts";
 import { vllm } from "./vllm.ts";
 
-export const builtins: Record<string, EngineAdapter> = { sglang, vllm };
+export const builtins: Record<string, EngineAdapter> = { llamacpp, sglang, vllm };
 
 /**
  * Probe each builtin's fingerprint endpoint. Returns the first matching
