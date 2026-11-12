@@ -1,0 +1,14 @@
+# llm-cockpit: live metrics for the two inference engines (SGLang + llama.cpp).
+# Run from this directory: docker compose up -d --build
+services:
+  cockpit:
+    build: .
+    image: llm-cockpit:dev
+    container_name: llm-cockpit
+    network_mode: host
+    restart: unless-stopped
+    gpus: all
+    environment:
+      - COCKPIT_CONFIG=/config/cockpit.config.yaml
+    volumes:
+      - ./cockpit.config.yaml:/config/cockpit.config.yaml
